@@ -185,11 +185,24 @@ private struct ARContainer: UIViewRepresentable {
     func makeCoordinator() -> Coordinator { Coordinator() }
 
     @MainActor
-    final class Coordinator: NSObject {
+    final class Coordinator: NSObject, UIGestureRecognizerDelegate {
         private weak var arView: ARView?
         private weak var controller: ARSessionController?
         private var placedEntities: [Entity] = []
         private var updateSubscription: Cancellable?
+
+        // User-applied roll around the entity's local +Z (its facing axis after
+        // the yaw billboard), per entity id. Re-applied each frame on top of
+        // the camera-facing orientation.
+        private var userRoll: [UInt64: Float] = [:]
+
+        // Transient gesture state.
+        private var pinchTarget: Entity?
+        private var pinchBaseScale: Float = 1
+        private var rotationTarget: Entity?
+        private var rotationBaseRoll: Float = 0
+        private var panTarget: Entity?
+        private var panAnchor: Entity?
 
         func attach(to arView: ARView, controller: ARSessionController) {
             self.arView = arView
@@ -199,6 +212,24 @@ private struct ARContainer: UIViewRepresentable {
                 self?.captureSnapshot()
             }
 
+            let pinch = UIPinchGestureRecognizer(
+                target: self, action: #selector(handlePinch(_:))
+            )
+            let rotation = UIRotationGestureRecognizer(
+                target: self, action: #selector(handleRotation(_:))
+            )
+            let pan = UIPanGestureRecognizer(
+                target: self, action: #selector(handlePan(_:))
+            )
+            // Single-finger drag — 2-finger pan is reserved for pinch/rotation.
+            pan.maximumNumberOfTouches = 1
+            pinch.delegate = self
+            rotation.delegate = self
+            pan.delegate = self
+            arView.addGestureRecognizer(pinch)
+            arView.addGestureRecognizer(rotation)
+            arView.addGestureRecognizer(pan)
+
             updateSubscription = arView.scene.subscribe(
                 to: SceneEvents.Update.self
             ) { [weak self] _ in
@@ -206,15 +237,35 @@ private struct ARContainer: UIViewRepresentable {
             }
         }
 
+        nonisolated func gestureRecognizer(
+            _ gestureRecognizer: UIGestureRecognizer,
+            shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer
+        ) -> Bool {
+            // Allow only pinch + rotation to run together (so the user can
+            // scale and rotate in one continuous motion). Pan stays exclusive
+            // — it's single-finger and shouldn't fire alongside multi-finger
+            // manipulation.
+            func isMultiTouchManip(_ g: UIGestureRecognizer) -> Bool {
+                g is UIPinchGestureRecognizer || g is UIRotationGestureRecognizer
+            }
+            return isMultiTouchManip(gestureRecognizer)
+                && isMultiTouchManip(otherGestureRecognizer)
+        }
+
         // MARK: - Tap to place
 
         @objc func handleTap(_ gesture: UITapGestureRecognizer) {
             guard let arView else { return }
+            let location = gesture.location(in: arView)
+            // Skip placement if the tap lands on an already-placed entity so
+            // the user doesn't accidentally drop a duplicate while trying to
+            // manipulate one.
+            if arView.entity(at: location) != nil { return }
+
             guard let companion = controller?.selectedCompanion else {
                 controller?.statusMessage = "先にキャラを登録してください"
                 return
             }
-            let location = gesture.location(in: arView)
             guard let result = arView.raycast(
                 from: location,
                 allowing: .estimatedPlane,
@@ -226,13 +277,89 @@ private struct ARContainer: UIViewRepresentable {
 
             let anchor = AnchorEntity(world: result.worldTransform)
             let entity = makeBillboardEntity(for: companion)
+            entity.generateCollisionShapes(recursive: false)
             // Position so the bottom edge sits on the detected plane.
             entity.position.y = currentBillboardHeight(for: companion) / 2
             anchor.addChild(entity)
             arView.scene.addAnchor(anchor)
 
             placedEntities.append(entity)
-            controller?.statusMessage = "置きました。シャッターで一緒に撮影"
+            controller?.statusMessage = "ドラッグで移動 / 二本指で拡大・回転 / シャッターで撮影"
+        }
+
+        // MARK: - Pinch / rotate
+
+        @objc func handlePinch(_ gesture: UIPinchGestureRecognizer) {
+            guard let arView else { return }
+            switch gesture.state {
+            case .began:
+                let pt = gesture.location(in: arView)
+                guard let target = arView.entity(at: pt),
+                      placedEntities.contains(where: { $0 === target }) else { return }
+                pinchTarget = target
+                pinchBaseScale = target.scale.x
+            case .changed:
+                guard let target = pinchTarget else { return }
+                let scale = max(0.2, min(4.0, pinchBaseScale * Float(gesture.scale)))
+                target.scale = SIMD3(repeating: scale)
+            case .ended, .cancelled, .failed:
+                pinchTarget = nil
+            default:
+                break
+            }
+        }
+
+        @objc func handleRotation(_ gesture: UIRotationGestureRecognizer) {
+            guard let arView else { return }
+            switch gesture.state {
+            case .began:
+                let pt = gesture.location(in: arView)
+                guard let target = arView.entity(at: pt),
+                      placedEntities.contains(where: { $0 === target }) else { return }
+                rotationTarget = target
+                rotationBaseRoll = userRoll[target.id] ?? 0
+            case .changed:
+                guard let target = rotationTarget else { return }
+                // Two-finger CCW gesture has positive `rotation` (UIKit convention),
+                // and a positive quaternion rotation around local +Z is CCW from
+                // the camera's POV after look(at:) — so the two agree directly.
+                userRoll[target.id] = rotationBaseRoll + Float(gesture.rotation)
+            case .ended, .cancelled, .failed:
+                rotationTarget = nil
+            default:
+                break
+            }
+        }
+
+        @objc func handlePan(_ gesture: UIPanGestureRecognizer) {
+            guard let arView else { return }
+            switch gesture.state {
+            case .began:
+                let pt = gesture.location(in: arView)
+                guard let target = arView.entity(at: pt),
+                      placedEntities.contains(where: { $0 === target }),
+                      let anchor = target.parent else { return }
+                panTarget = target
+                panAnchor = anchor
+            case .changed:
+                guard let anchor = panAnchor else { return }
+                let pt = gesture.location(in: arView)
+                guard let result = arView.raycast(
+                    from: pt,
+                    allowing: .estimatedPlane,
+                    alignment: .horizontal
+                ).first else { return }
+                let t = result.worldTransform.columns.3
+                // Anchor's local position == world position (it's a scene-root
+                // child). Entity's local Y offset is preserved, so the bottom
+                // edge re-aligns to whatever floor the raycast hit.
+                anchor.position = SIMD3<Float>(t.x, t.y, t.z)
+            case .ended, .cancelled, .failed:
+                panTarget = nil
+                panAnchor = nil
+            default:
+                break
+            }
         }
 
         // MARK: - Capture
@@ -291,7 +418,15 @@ private struct ARContainer: UIViewRepresentable {
                 let mirror = entityPos + lookDir
                 // look(at:) orients -Z toward target; plane's visible face is +Z,
                 // so aiming at the mirrored point makes the front face the camera.
+                // Scale is preserved by look(at:), so pinch-applied scale survives.
                 entity.look(at: mirror, from: entityPos, relativeTo: nil)
+
+                // Layer the user's roll on top in local space (around +Z, which
+                // is the entity's facing axis once the look-at runs).
+                if let roll = userRoll[entity.id], roll != 0 {
+                    let rollQuat = simd_quatf(angle: roll, axis: SIMD3<Float>(0, 0, 1))
+                    entity.orientation = entity.orientation * rollQuat
+                }
             }
         }
 
