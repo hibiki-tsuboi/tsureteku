@@ -76,7 +76,7 @@ struct CharacterDetailView: View {
 
             Section("Object Capture") {
                 NavigationLink {
-                    ObjectCaptureWorkflowView(character: character)
+                    ObjectCapturePreparationView(character: character)
                 } label: {
                     Label("3D撮影セットを作る", systemImage: "camera.aperture")
                 }
