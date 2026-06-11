@@ -121,44 +121,52 @@ struct ObjectCaptureWorkflowView: View {
 
     private var overlay: some View {
         VStack(spacing: 0) {
-            statusPanel
+            guidancePanel
                 .padding(.horizontal, 16)
                 .padding(.top, 14)
 
             Spacer()
 
-            controls
+            actionPanel
                 .padding(.horizontal, 18)
                 .padding(.bottom, 24)
         }
     }
 
-    private var statusPanel: some View {
-        VStack(alignment: .leading, spacing: 8) {
+    private var guidancePanel: some View {
+        VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Label(stateText, systemImage: stateIconName)
+                Label(workflowStep.title, systemImage: workflowStep.iconName)
                     .font(.headline)
 
                 Spacer()
 
-                Text("\(numberOfShotsTaken)枚")
+                Text("\(workflowStep.index)/\(CaptureWorkflowStep.allCases.count)")
                     .font(.subheadline.monospacedDigit())
                     .foregroundStyle(.secondary)
             }
 
-            Text(trackingText)
-                .font(.caption)
-                .foregroundStyle(.secondary)
+            stepProgress
 
-            if !feedback.isEmpty {
-                Text(feedbackText)
-                    .font(.caption)
-                    .foregroundStyle(.orange)
+            Text(stepInstruction)
+                .font(.subheadline)
+
+            HStack(spacing: 12) {
+                Label("\(numberOfShotsTaken)枚", systemImage: "photo.stack")
+                Label(trackingLabelText, systemImage: "location.viewfinder")
             }
+            .font(.caption)
+            .foregroundStyle(.secondary)
 
             if isReconstructing {
                 ProgressView(value: reconstructionProgress)
                 Text(reconstructionStatus)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            if let statusMessage {
+                Text(statusMessage)
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -169,23 +177,35 @@ struct ObjectCaptureWorkflowView: View {
                     .foregroundStyle(.orange)
             }
 
-            if let statusMessage {
-                Text(statusMessage)
+            if !feedback.isEmpty {
+                Text(feedbackText)
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(.orange)
             }
         }
         .padding(14)
         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 8))
     }
 
-    private var controls: some View {
-        VStack(spacing: 12) {
+    private var stepProgress: some View {
+        HStack(spacing: 6) {
+            ForEach(CaptureWorkflowStep.allCases) { step in
+                Capsule()
+                    .fill(step.rawValue <= workflowStep.rawValue ? Color.accentColor : Color.secondary.opacity(0.28))
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 4)
+            }
+        }
+        .accessibilityHidden(true)
+    }
+
+    private var actionPanel: some View {
+        VStack(alignment: .leading, spacing: 12) {
             if userCompletedScanPass {
                 Button {
-                    session.beginNewScanPassAfterFlip()
+                    beginBackSideCapture()
                 } label: {
-                    Label("反対側を撮る", systemImage: "arrow.triangle.2.circlepath.camera")
+                    Label("裏側を撮る", systemImage: "arrow.triangle.2.circlepath.camera")
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.borderedProminent)
@@ -197,9 +217,8 @@ struct ObjectCaptureWorkflowView: View {
                 Button {
                     session.finish()
                 } label: {
-                    Image(systemName: "checkmark")
-                        .font(.headline)
-                        .frame(width: 46, height: 46)
+                    Label("完了", systemImage: "checkmark")
+                        .frame(minWidth: 86, minHeight: 46)
                 }
                 .buttonStyle(.bordered)
                 .disabled(!canFinish)
@@ -210,15 +229,22 @@ struct ObjectCaptureWorkflowView: View {
                 Button {
                     reconstructModel()
                 } label: {
-                    Label("3Dモデル生成", systemImage: "cube")
+                    Label("3Dキャラを作成", systemImage: "cube")
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.borderedProminent)
-                .disabled(isReconstructing || numberOfShotsTaken < 20)
+                .disabled(isReconstructing || !canGenerateModel)
+            }
+
+            if let actionHint {
+                Text(actionHint)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
         }
         .padding(14)
         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 8))
+        .controlSize(.large)
     }
 
     @ViewBuilder
@@ -238,7 +264,7 @@ struct ObjectCaptureWorkflowView: View {
             Button {
                 startDetection()
             } label: {
-                Label("検出開始", systemImage: "viewfinder")
+                Label("ぬいぐるみを認識", systemImage: "viewfinder")
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(.borderedProminent)
@@ -247,14 +273,14 @@ struct ObjectCaptureWorkflowView: View {
             Button {
                 startCapturing()
             } label: {
-                Label("撮影開始", systemImage: "record.circle")
+                Label("周りを撮影", systemImage: "record.circle")
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(.borderedProminent)
 
         case .capturing:
             Button {
-                session.requestImageCapture()
+                requestManualCapture()
             } label: {
                 Label("1枚撮る", systemImage: "camera")
                     .frame(maxWidth: .infinity)
@@ -300,59 +326,114 @@ struct ObjectCaptureWorkflowView: View {
         }
     }
 
+    private var workflowStep: CaptureWorkflowStep {
+        if isReconstructing {
+            return .generate
+        }
+
+        if case .completed = captureState {
+            return .generate
+        }
+
+        if userCompletedScanPass {
+            return .backSide
+        }
+
+        switch captureState {
+        case .initializing, .ready, .failed:
+            return .setup
+        case .detecting:
+            return .recognize
+        case .capturing, .finishing:
+            return .capture
+        case .completed:
+            return .generate
+        @unknown default:
+            return .setup
+        }
+    }
+
+    private var stepInstruction: String {
+        if userCompletedScanPass {
+            return "表側の撮影が一区切りつきました。必要ならぬいぐるみを裏返して、裏側も撮影します。"
+        }
+
+        switch captureState {
+        case .initializing:
+            return "カメラを準備しています。ぬいぐるみを明るい場所に置いて、全体が見える位置にします。"
+        case .ready:
+            return "ぬいぐるみ全体を画面に入れて、下のボタンで認識を始めます。"
+        case .detecting:
+            return "画面のガイドに合わせて、ぬいぐるみが見切れない位置で待ちます。"
+        case .capturing:
+            return "ぬいぐるみは動かさず、iPhoneをゆっくり回して周りを撮影します。"
+        case .finishing:
+            return "撮影データを保存しています。このまま待ちます。"
+        case .completed:
+            return "撮影データができました。枚数が十分なら3Dキャラを作成できます。"
+        case .failed:
+            return "撮影準備に失敗しました。再開するか、明るさとカメラ許可を確認してください。"
+        @unknown default:
+            return "状態を確認しています。"
+        }
+    }
+
+    private var actionHint: String? {
+        if isReconstructing {
+            return "生成が終わると、このキャラの3Dモデルとして登録されます。"
+        }
+
+        if case .completed = captureState {
+            if canGenerateModel {
+                return "作成した3DキャラはAR配置で自動的に使われます。"
+            }
+
+            return "3Dキャラ作成には20枚以上を目安にしてください。あと\(shotsNeededForModel)枚撮ると作成できます。"
+        }
+
+        switch captureState {
+        case .ready:
+            return "ぬいぐるみだけが大きく映るようにすると認識しやすくなります。"
+        case .detecting:
+            return "認識できたら「周りを撮影」に進みます。"
+        case .capturing:
+            return "\(minimumShotsForModel)枚以上撮ると、3Dキャラ作成に進みやすくなります。"
+        default:
+            return nil
+        }
+    }
+
+    private var trackingLabelText: String {
+        switch cameraTracking {
+        case .notAvailable:
+            return "追跡未取得"
+        case .normal:
+            return "追跡良好"
+        case .limited:
+            return "追跡制限中"
+        @unknown default:
+            return "追跡確認中"
+        }
+    }
+
+    private var canGenerateModel: Bool {
+        numberOfShotsTaken >= minimumShotsForModel
+    }
+
+    private var shotsNeededForModel: Int {
+        max(0, minimumShotsForModel - numberOfShotsTaken)
+    }
+
+    private var minimumShotsForModel: Int {
+        20
+    }
+
     private var canFinish: Bool {
         switch captureState {
         case .capturing, .detecting:
             numberOfShotsTaken > 0
         default:
             false
-        }
-    }
-
-    private var stateText: String {
-        switch captureState {
-        case .initializing:
-            "初期化中"
-        case .ready:
-            "撮影準備OK"
-        case .detecting:
-            "対象を検出中"
-        case .capturing:
-            "撮影中"
-        case .finishing:
-            "保存中"
-        case .completed:
-            "撮影完了"
-        case .failed(let error):
-            error.localizedDescription
-        @unknown default:
-            "状態を確認中"
-        }
-    }
-
-    private var stateIconName: String {
-        switch captureState {
-        case .completed:
-            "checkmark.circle"
-        case .failed:
-            "exclamationmark.triangle"
-        case .capturing:
-            "camera"
-        default:
-            "camera.aperture"
-        }
-    }
-
-    private var trackingText: String {
-        switch cameraTracking {
-        case .notAvailable:
-            "カメラ追跡: 未取得"
-        case .normal:
-            "カメラ追跡: 良好"
-        case .limited(let reason):
-            "カメラ追跡: \(trackingReasonText(reason))"
-        @unknown default:
-            "カメラ追跡: 確認中"
         }
     }
 
@@ -490,6 +571,17 @@ struct ObjectCaptureWorkflowView: View {
         statusMessage = "端末をゆっくり動かして、ぬいぐるみを一周撮影してください。"
     }
 
+    private func requestManualCapture() {
+        session.requestImageCapture()
+        statusMessage = "1枚撮影しました。角度を少し変えて続けてください。"
+    }
+
+    private func beginBackSideCapture() {
+        userCompletedScanPass = false
+        statusMessage = "裏側の撮影を始めます。ぬいぐるみを裏返してゆっくり撮影してください。"
+        session.beginNewScanPassAfterFlip()
+    }
+
     private func restorePreviousCaptureDirectoryIfEmpty() {
         guard numberOfShotsTaken == 0,
               let activeCaptureDirectoryName,
@@ -532,14 +624,11 @@ struct ObjectCaptureWorkflowView: View {
 
     private enum CaptureStartupError: LocalizedError {
         case cameraAccessDenied
-        case detectionStartFailed
 
         var errorDescription: String? {
             switch self {
             case .cameraAccessDenied:
                 "カメラの利用が許可されていません。"
-            case .detectionStartFailed:
-                "検出を開始できませんでした。"
             }
         }
     }
@@ -670,18 +759,50 @@ struct ObjectCaptureWorkflowView: View {
         }
     }
 
-    private func trackingReasonText(_ reason: ObjectCaptureSession.Tracking.Reason) -> String {
-        switch reason {
-        case .initializing:
-            "初期化中"
-        case .relocalizing:
-            "再認識中"
-        case .excessiveMotion:
-            "動きが大きすぎます"
-        case .insufficientFeatures:
-            "特徴点が不足しています"
-        @unknown default:
-            "制限中"
+}
+
+private enum CaptureWorkflowStep: Int, CaseIterable, Identifiable {
+    case setup
+    case recognize
+    case capture
+    case backSide
+    case generate
+
+    var id: Self {
+        self
+    }
+
+    var index: Int {
+        rawValue + 1
+    }
+
+    var title: String {
+        switch self {
+        case .setup:
+            "準備"
+        case .recognize:
+            "認識"
+        case .capture:
+            "周囲を撮影"
+        case .backSide:
+            "裏側を撮影"
+        case .generate:
+            "3Dキャラ作成"
+        }
+    }
+
+    var iconName: String {
+        switch self {
+        case .setup:
+            "light.max"
+        case .recognize:
+            "viewfinder"
+        case .capture:
+            "camera"
+        case .backSide:
+            "arrow.triangle.2.circlepath.camera"
+        case .generate:
+            "cube"
         }
     }
 }
