@@ -41,10 +41,14 @@ struct ObjectCaptureWorkflowView: View {
     var body: some View {
         ZStack {
             if ObjectCaptureSession.isSupported {
-                ObjectCaptureView(session: session)
-                    .hideObjectReticle(false)
-                    .id(session.id)
-                    .ignoresSafeArea(edges: .top)
+                if shouldShowObjectCaptureView {
+                    ObjectCaptureView(session: session)
+                        .hideObjectReticle(false)
+                        .id(session.id)
+                        .ignoresSafeArea(edges: .top)
+                } else {
+                    completedCaptureBackground
+                }
 
                 overlay
                     .zIndex(1)
@@ -115,6 +119,48 @@ struct ObjectCaptureWorkflowView: View {
 
             for await numberOfShotsTaken in currentSession.numberOfShotsTakenUpdates {
                 self.numberOfShotsTaken = numberOfShotsTaken
+            }
+        }
+    }
+
+    private var shouldShowObjectCaptureView: Bool {
+        guard !isReconstructing else {
+            return false
+        }
+
+        if case .completed = captureState {
+            return false
+        }
+
+        return true
+    }
+
+    private var completedCaptureBackground: some View {
+        ZStack {
+            Color(.systemGroupedBackground)
+                .ignoresSafeArea()
+
+            if isReconstructing {
+                ContentUnavailableView {
+                    Label("3Dキャラを作成中", systemImage: "cube")
+                } description: {
+                    Text("完了までこのままお待ちください。")
+                }
+                .padding(.horizontal, 24)
+            } else if canGenerateModel {
+                ContentUnavailableView {
+                    Label("撮影データを保存しました", systemImage: "checkmark.circle")
+                } description: {
+                    Text("このまま3Dキャラを作成できます。")
+                }
+                .padding(.horizontal, 24)
+            } else {
+                ContentUnavailableView {
+                    Label("撮影データが不足しています", systemImage: "exclamationmark.triangle")
+                } description: {
+                    Text("3Dキャラ作成には20枚以上を目安に撮影してください。撮り直すには「撮り直す」をタップしてください。")
+                }
+                .padding(.horizontal, 24)
             }
         }
     }
@@ -214,15 +260,17 @@ struct ObjectCaptureWorkflowView: View {
             HStack(spacing: 12) {
                 primaryButton
 
-                Button {
-                    session.finish()
-                } label: {
-                    Label("完了", systemImage: "checkmark")
-                        .frame(minWidth: 86, minHeight: 46)
+                if shouldShowFinishButton {
+                    Button {
+                        session.finish()
+                    } label: {
+                        Label("完了", systemImage: "checkmark")
+                            .frame(minWidth: 86, minHeight: 46)
+                    }
+                    .buttonStyle(.bordered)
+                    .disabled(!canFinish)
+                    .accessibilityLabel("撮影完了")
                 }
-                .buttonStyle(.bordered)
-                .disabled(!canFinish)
-                .accessibilityLabel("撮影完了")
             }
 
             if case .completed = captureState {
@@ -432,6 +480,15 @@ struct ObjectCaptureWorkflowView: View {
         switch captureState {
         case .capturing, .detecting:
             numberOfShotsTaken > 0
+        default:
+            false
+        }
+    }
+
+    private var shouldShowFinishButton: Bool {
+        switch captureState {
+        case .detecting, .capturing:
+            true
         default:
             false
         }
