@@ -32,7 +32,7 @@ struct ARCharacterView: UIViewRepresentable {
     @Binding var removeSelectedTrigger: Int
     @Binding var clearPlacementSelectionTrigger: Int
     @Binding var selectedPlacementName: String?
-    var onCapture: (Result<Void, Error>) -> Void
+    var onCapture: (Result<UIImage, Error>) -> Void
     var onStatus: (String) -> Void
 
     func makeCoordinator() -> Coordinator {
@@ -153,7 +153,7 @@ struct ARCharacterView: UIViewRepresentable {
         var lastFaceCameraTrigger = 0
         var lastRemoveSelectedTrigger = 0
         var lastClearPlacementSelectionTrigger = 0
-        var onCapture: (Result<Void, Error>) -> Void
+        var onCapture: (Result<UIImage, Error>) -> Void
         var onStatus: (String) -> Void
         var selectedPlacementName: Binding<String?>
         private var placements: [PlacedCharacter] = []
@@ -162,7 +162,7 @@ struct ARCharacterView: UIViewRepresentable {
         init(
             selectedAsset: CharacterARAsset?,
             selectedPlacementName: Binding<String?>,
-            onCapture: @escaping (Result<Void, Error>) -> Void,
+            onCapture: @escaping (Result<UIImage, Error>) -> Void,
             onStatus: @escaping (String) -> Void
         ) {
             self.selectedAsset = selectedAsset
@@ -248,9 +248,7 @@ struct ARCharacterView: UIViewRepresentable {
                     return
                 }
 
-                PhotoLibrarySaver.save(image) { result in
-                    self.onCapture(result)
-                }
+                self.onCapture(.success(image))
             }
         }
 

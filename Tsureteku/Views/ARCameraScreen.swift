@@ -7,6 +7,7 @@
 
 import SwiftData
 import SwiftUI
+import UIKit
 
 struct ARCameraScreen: View {
     @Environment(\.modelContext) private var modelContext
@@ -26,6 +27,7 @@ struct ARCameraScreen: View {
     @State private var isAddingCharacter = false
     @State private var statusMessage: String?
     @State private var selectedPlacementName: String?
+    @State private var capturedPhoto: CapturedARPhoto?
 
     var body: some View {
         ZStack {
@@ -59,6 +61,11 @@ struct ARCameraScreen: View {
         }
         .sheet(isPresented: $isAddingCharacter) {
             AddCharacterView()
+        }
+        .fullScreenCover(item: $capturedPhoto) { photo in
+            CapturedPhotoPreviewView(image: photo.image) { result in
+                handlePreviewSave(result)
+            }
         }
     }
 
@@ -325,7 +332,16 @@ struct ARCameraScreen: View {
         try? modelContext.save()
     }
 
-    private func handleCapture(_ result: Result<Void, Error>) {
+    private func handleCapture(_ result: Result<UIImage, Error>) {
+        switch result {
+        case .success(let image):
+            capturedPhoto = CapturedARPhoto(image: image)
+        case .failure(let error):
+            showStatus(error.localizedDescription)
+        }
+    }
+
+    private func handlePreviewSave(_ result: Result<Void, Error>) {
         switch result {
         case .success:
             showStatus("写真に保存しました。")
@@ -348,6 +364,11 @@ struct ARCameraScreen: View {
             }
         }
     }
+}
+
+private struct CapturedARPhoto: Identifiable {
+    let id = UUID()
+    let image: UIImage
 }
 
 #Preview {
