@@ -24,11 +24,24 @@ struct ARCharacterView: UIViewRepresentable {
     @Binding var captureTrigger: Int
     @Binding var removeLastTrigger: Int
     @Binding var resetTrigger: Int
+    @Binding var scaleDownTrigger: Int
+    @Binding var scaleUpTrigger: Int
+    @Binding var rotateLeftTrigger: Int
+    @Binding var rotateRightTrigger: Int
+    @Binding var faceCameraTrigger: Int
+    @Binding var removeSelectedTrigger: Int
+    @Binding var clearPlacementSelectionTrigger: Int
+    @Binding var selectedPlacementName: String?
     var onCapture: (Result<Void, Error>) -> Void
     var onStatus: (String) -> Void
 
     func makeCoordinator() -> Coordinator {
-        Coordinator(selectedAsset: selectedAsset, onCapture: onCapture, onStatus: onStatus)
+        Coordinator(
+            selectedAsset: selectedAsset,
+            selectedPlacementName: $selectedPlacementName,
+            onCapture: onCapture,
+            onStatus: onStatus
+        )
     }
 
     func makeUIView(context: Context) -> ARView {
@@ -41,6 +54,7 @@ struct ARCharacterView: UIViewRepresentable {
         context.coordinator.selectedAsset = selectedAsset
         context.coordinator.onCapture = onCapture
         context.coordinator.onStatus = onStatus
+        context.coordinator.selectedPlacementName = $selectedPlacementName
 
         if captureTrigger != context.coordinator.lastCaptureTrigger {
             context.coordinator.lastCaptureTrigger = captureTrigger
@@ -65,6 +79,62 @@ struct ARCharacterView: UIViewRepresentable {
                 context.coordinator.resetPlacements(in: arView)
             }
         }
+
+        if scaleDownTrigger != context.coordinator.lastScaleDownTrigger {
+            context.coordinator.lastScaleDownTrigger = scaleDownTrigger
+
+            if scaleDownTrigger > 0 {
+                context.coordinator.scaleSelectedPlacement(by: 0.9)
+            }
+        }
+
+        if scaleUpTrigger != context.coordinator.lastScaleUpTrigger {
+            context.coordinator.lastScaleUpTrigger = scaleUpTrigger
+
+            if scaleUpTrigger > 0 {
+                context.coordinator.scaleSelectedPlacement(by: 1.1)
+            }
+        }
+
+        if rotateLeftTrigger != context.coordinator.lastRotateLeftTrigger {
+            context.coordinator.lastRotateLeftTrigger = rotateLeftTrigger
+
+            if rotateLeftTrigger > 0 {
+                context.coordinator.rotateSelectedPlacement(by: Float.pi / 12)
+            }
+        }
+
+        if rotateRightTrigger != context.coordinator.lastRotateRightTrigger {
+            context.coordinator.lastRotateRightTrigger = rotateRightTrigger
+
+            if rotateRightTrigger > 0 {
+                context.coordinator.rotateSelectedPlacement(by: -Float.pi / 12)
+            }
+        }
+
+        if faceCameraTrigger != context.coordinator.lastFaceCameraTrigger {
+            context.coordinator.lastFaceCameraTrigger = faceCameraTrigger
+
+            if faceCameraTrigger > 0 {
+                context.coordinator.faceSelectedPlacementToCamera(in: arView)
+            }
+        }
+
+        if removeSelectedTrigger != context.coordinator.lastRemoveSelectedTrigger {
+            context.coordinator.lastRemoveSelectedTrigger = removeSelectedTrigger
+
+            if removeSelectedTrigger > 0 {
+                context.coordinator.removeSelectedPlacement(in: arView)
+            }
+        }
+
+        if clearPlacementSelectionTrigger != context.coordinator.lastClearPlacementSelectionTrigger {
+            context.coordinator.lastClearPlacementSelectionTrigger = clearPlacementSelectionTrigger
+
+            if clearPlacementSelectionTrigger > 0 {
+                context.coordinator.clearSelectedPlacement()
+            }
+        }
     }
 
     static func dismantleUIView(_ arView: ARView, coordinator: Coordinator) {
@@ -76,16 +146,27 @@ struct ARCharacterView: UIViewRepresentable {
         var lastCaptureTrigger = 0
         var lastRemoveLastTrigger = 0
         var lastResetTrigger = 0
+        var lastScaleDownTrigger = 0
+        var lastScaleUpTrigger = 0
+        var lastRotateLeftTrigger = 0
+        var lastRotateRightTrigger = 0
+        var lastFaceCameraTrigger = 0
+        var lastRemoveSelectedTrigger = 0
+        var lastClearPlacementSelectionTrigger = 0
         var onCapture: (Result<Void, Error>) -> Void
         var onStatus: (String) -> Void
-        private var placedAnchors: [AnchorEntity] = []
+        var selectedPlacementName: Binding<String?>
+        private var placements: [PlacedCharacter] = []
+        private var selectedPlacementID: UUID?
 
         init(
             selectedAsset: CharacterARAsset?,
+            selectedPlacementName: Binding<String?>,
             onCapture: @escaping (Result<Void, Error>) -> Void,
             onStatus: @escaping (String) -> Void
         ) {
             self.selectedAsset = selectedAsset
+            self.selectedPlacementName = selectedPlacementName
             self.onCapture = onCapture
             self.onStatus = onStatus
         }
@@ -132,6 +213,14 @@ struct ARCharacterView: UIViewRepresentable {
             }
 
             let location = recognizer.location(in: arView)
+
+            if let tappedEntity = arView.entity(at: location),
+               let placement = placement(containing: tappedEntity) {
+                selectPlacement(placement)
+                onStatus("\(placement.name)を選択しました。")
+                return
+            }
+
             let results = arView.raycast(from: location, allowing: .estimatedPlane, alignment: .horizontal)
 
             guard let result = results.first else {
@@ -140,7 +229,8 @@ struct ARCharacterView: UIViewRepresentable {
             }
 
             do {
-                try place(selectedAsset, at: result, in: arView)
+                let placement = try place(selectedAsset, at: result, in: arView)
+                selectPlacement(placement)
                 onStatus("\(selectedAsset.name)を配置しました。")
             } catch {
                 onStatus(error.localizedDescription)
@@ -164,7 +254,8 @@ struct ARCharacterView: UIViewRepresentable {
             }
         }
 
-        private func place(_ asset: CharacterARAsset, at result: ARRaycastResult, in arView: ARView) throws {
+        @discardableResult
+        private func place(_ asset: CharacterARAsset, at result: ARRaycastResult, in arView: ARView) throws -> PlacedCharacter {
             if let modelFileName = asset.modelFileName {
                 try placeModel(asset, modelFileName: modelFileName, at: result, in: arView)
             } else {
@@ -173,30 +264,98 @@ struct ARCharacterView: UIViewRepresentable {
         }
 
         func removeLastPlacement(in arView: ARView) {
-            guard let anchor = placedAnchors.popLast() else {
+            guard let placement = placements.popLast() else {
                 onStatus("削除できるキャラがありません。")
                 return
             }
 
-            arView.scene.removeAnchor(anchor)
+            arView.scene.removeAnchor(placement.anchor)
+            if selectedPlacementID == placement.id {
+                clearSelectedPlacement()
+            }
             onStatus("最後のキャラを削除しました。")
         }
 
         func resetPlacements(in arView: ARView) {
-            guard !placedAnchors.isEmpty else {
+            guard !placements.isEmpty else {
                 onStatus("リセットできるキャラがありません。")
                 return
             }
 
-            for anchor in placedAnchors {
-                arView.scene.removeAnchor(anchor)
+            for placement in placements {
+                arView.scene.removeAnchor(placement.anchor)
             }
 
-            placedAnchors.removeAll()
+            placements.removeAll()
+            clearSelectedPlacement()
             onStatus("配置をリセットしました。")
         }
 
-        private func placeCutout(_ asset: CharacterARAsset, at result: ARRaycastResult, in arView: ARView) throws {
+        func scaleSelectedPlacement(by factor: Float) {
+            guard let placement = selectedPlacement else {
+                onStatus("調整するキャラを選択してください。")
+                return
+            }
+
+            let newScale = placement.entity.scale * factor
+            let relativeScale = relativeScale(for: newScale, baseScale: placement.baseScale)
+
+            guard (0.25...4.0).contains(relativeScale) else {
+                onStatus("これ以上サイズを変更できません。")
+                return
+            }
+
+            placement.entity.scale = newScale
+        }
+
+        func rotateSelectedPlacement(by angle: Float) {
+            guard let placement = selectedPlacement else {
+                onStatus("回転するキャラを選択してください。")
+                return
+            }
+
+            let rotation = simd_quatf(angle: angle, axis: [0, 1, 0])
+            placement.entity.orientation = simd_mul(placement.entity.orientation, rotation)
+        }
+
+        func faceSelectedPlacementToCamera(in arView: ARView) {
+            guard let placement = selectedPlacement else {
+                onStatus("向きを変えるキャラを選択してください。")
+                return
+            }
+
+            let anchorPosition = placement.anchor.position(relativeTo: nil)
+            placement.entity.orientation = orientationFacingCamera(anchorPosition: anchorPosition, arView: arView)
+            onStatus("カメラの方向に向けました。")
+        }
+
+        func removeSelectedPlacement(in arView: ARView) {
+            guard let selectedPlacementID,
+                  let index = placements.firstIndex(where: { $0.id == selectedPlacementID }) else {
+                onStatus("削除するキャラを選択してください。")
+                return
+            }
+
+            let placement = placements.remove(at: index)
+            arView.scene.removeAnchor(placement.anchor)
+            clearSelectedPlacement()
+            onStatus("\(placement.name)を削除しました。")
+        }
+
+        func clearSelectedPlacement() {
+            selectedPlacementID = nil
+            selectedPlacementName.wrappedValue = nil
+        }
+
+        private var selectedPlacement: PlacedCharacter? {
+            guard let selectedPlacementID else {
+                return nil
+            }
+
+            return placements.first { $0.id == selectedPlacementID }
+        }
+
+        private func placeCutout(_ asset: CharacterARAsset, at result: ARRaycastResult, in arView: ARView) throws -> PlacedCharacter {
             let imageURL = try CharacterImageStore.url(for: asset.cutoutImageFileName, kind: .cutout)
             let texture = try TextureResource.load(
                 contentsOf: imageURL,
@@ -223,8 +382,16 @@ struct ARCharacterView: UIViewRepresentable {
             let anchor = AnchorEntity(raycastResult: result)
             anchor.addChild(entity)
             arView.scene.addAnchor(anchor)
-            placedAnchors.append(anchor)
             arView.installGestures([.translation, .rotation, .scale], for: entity)
+
+            let placement = PlacedCharacter(
+                anchor: anchor,
+                entity: entity,
+                name: asset.name,
+                baseScale: entity.scale
+            )
+            placements.append(placement)
+            return placement
         }
 
         private func placeModel(
@@ -232,7 +399,7 @@ struct ARCharacterView: UIViewRepresentable {
             modelFileName: String,
             at result: ARRaycastResult,
             in arView: ARView
-        ) throws {
+        ) throws -> PlacedCharacter {
             let modelURL = try CharacterImageStore.modelURL(for: modelFileName)
             let entity = try ModelEntity.loadModel(contentsOf: modelURL, withName: asset.id.uuidString)
             let bounds = entity.visualBounds(recursive: true, relativeTo: entity)
@@ -248,8 +415,16 @@ struct ARCharacterView: UIViewRepresentable {
             let anchor = AnchorEntity(raycastResult: result)
             anchor.addChild(entity)
             arView.scene.addAnchor(anchor)
-            placedAnchors.append(anchor)
             arView.installGestures([.translation, .rotation, .scale], for: entity)
+
+            let placement = PlacedCharacter(
+                anchor: anchor,
+                entity: entity,
+                name: asset.name,
+                baseScale: entity.scale
+            )
+            placements.append(placement)
+            return placement
         }
 
         private func orientationFacingCamera(from worldTransform: simd_float4x4, arView: ARView) -> simd_quatf {
@@ -258,6 +433,10 @@ struct ARCharacterView: UIViewRepresentable {
                 worldTransform.columns.3.y,
                 worldTransform.columns.3.z
             )
+            return orientationFacingCamera(anchorPosition: anchorPosition, arView: arView)
+        }
+
+        private func orientationFacingCamera(anchorPosition: SIMD3<Float>, arView: ARView) -> simd_quatf {
             let cameraPosition = arView.cameraTransform.translation
             let direction = SIMD3<Float>(
                 cameraPosition.x - anchorPosition.x,
@@ -272,6 +451,48 @@ struct ARCharacterView: UIViewRepresentable {
             let normalizedDirection = simd_normalize(direction)
             let yaw = atan2(normalizedDirection.x, normalizedDirection.z)
             return simd_quatf(angle: yaw, axis: [0, 1, 0])
+        }
+
+        private func selectPlacement(_ placement: PlacedCharacter) {
+            selectedPlacementID = placement.id
+            selectedPlacementName.wrappedValue = placement.name
+        }
+
+        private func placement(containing entity: Entity) -> PlacedCharacter? {
+            var currentEntity: Entity? = entity
+
+            while let candidate = currentEntity {
+                if let placement = placements.first(where: { $0.entity === candidate }) {
+                    return placement
+                }
+
+                currentEntity = candidate.parent
+            }
+
+            return nil
+        }
+
+        private func relativeScale(for scale: SIMD3<Float>, baseScale: SIMD3<Float>) -> Float {
+            let x = relativeAxisScale(scale.x, baseScale.x)
+            let y = relativeAxisScale(scale.y, baseScale.y)
+            let z = relativeAxisScale(scale.z, baseScale.z)
+            return (x + y + z) / 3
+        }
+
+        private func relativeAxisScale(_ value: Float, _ baseValue: Float) -> Float {
+            guard abs(baseValue) > 0.0001 else {
+                return 1
+            }
+
+            return abs(value / baseValue)
+        }
+
+        private struct PlacedCharacter {
+            let id = UUID()
+            let anchor: AnchorEntity
+            let entity: Entity
+            let name: String
+            let baseScale: SIMD3<Float>
         }
     }
 }

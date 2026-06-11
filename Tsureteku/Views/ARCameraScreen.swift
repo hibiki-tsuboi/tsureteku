@@ -16,8 +16,16 @@ struct ARCameraScreen: View {
     @State private var captureTrigger = 0
     @State private var removeLastTrigger = 0
     @State private var resetTrigger = 0
+    @State private var scaleDownTrigger = 0
+    @State private var scaleUpTrigger = 0
+    @State private var rotateLeftTrigger = 0
+    @State private var rotateRightTrigger = 0
+    @State private var faceCameraTrigger = 0
+    @State private var removeSelectedTrigger = 0
+    @State private var clearPlacementSelectionTrigger = 0
     @State private var isAddingCharacter = false
     @State private var statusMessage: String?
+    @State private var selectedPlacementName: String?
 
     var body: some View {
         ZStack {
@@ -26,6 +34,14 @@ struct ARCameraScreen: View {
                 captureTrigger: $captureTrigger,
                 removeLastTrigger: $removeLastTrigger,
                 resetTrigger: $resetTrigger,
+                scaleDownTrigger: $scaleDownTrigger,
+                scaleUpTrigger: $scaleUpTrigger,
+                rotateLeftTrigger: $rotateLeftTrigger,
+                rotateRightTrigger: $rotateRightTrigger,
+                faceCameraTrigger: $faceCameraTrigger,
+                removeSelectedTrigger: $removeSelectedTrigger,
+                clearPlacementSelectionTrigger: $clearPlacementSelectionTrigger,
+                selectedPlacementName: $selectedPlacementName,
                 onCapture: handleCapture,
                 onStatus: showStatus
             )
@@ -117,8 +133,10 @@ struct ARCameraScreen: View {
                 .buttonStyle(.borderedProminent)
                 .padding(.horizontal, 20)
             } else {
+                selectedCharacterSummary
                 characterPicker
                 sizeControl
+                placementTools
 
                 Button {
                     captureTrigger += 1
@@ -156,6 +174,39 @@ struct ARCameraScreen: View {
     }
 
     @ViewBuilder
+    private var selectedCharacterSummary: some View {
+        if let selectedCharacter {
+            HStack(spacing: 10) {
+                Label(
+                    selectedCharacter.name,
+                    systemImage: selectedCharacter.modelFileName == nil ? "photo" : "cube.fill"
+                )
+                .font(.subheadline.weight(.semibold))
+                .lineLimit(1)
+
+                Spacer()
+
+                Text(selectedCharacter.modelFileName == nil ? "2D" : "3D")
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(.thinMaterial, in: Capsule())
+
+                if let selectedPlacementName {
+                    Label(selectedPlacementName, systemImage: "scope")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+            }
+            .padding(.horizontal, 18)
+            .padding(.vertical, 10)
+            .background(.ultraThinMaterial)
+        }
+    }
+
+    @ViewBuilder
     private var sizeControl: some View {
         if let selectedCharacter {
             HStack(spacing: 10) {
@@ -183,6 +234,56 @@ struct ARCameraScreen: View {
             .padding(.vertical, 10)
             .background(.ultraThinMaterial)
         }
+    }
+
+    @ViewBuilder
+    private var placementTools: some View {
+        if selectedPlacementName != nil {
+            HStack(spacing: 10) {
+                placementToolButton(systemImage: "minus.circle", accessibilityLabel: "選択中のキャラを小さく") {
+                    scaleDownTrigger += 1
+                }
+
+                placementToolButton(systemImage: "plus.circle", accessibilityLabel: "選択中のキャラを大きく") {
+                    scaleUpTrigger += 1
+                }
+
+                placementToolButton(systemImage: "rotate.left", accessibilityLabel: "選択中のキャラを左に回転") {
+                    rotateLeftTrigger += 1
+                }
+
+                placementToolButton(systemImage: "rotate.right", accessibilityLabel: "選択中のキャラを右に回転") {
+                    rotateRightTrigger += 1
+                }
+
+                placementToolButton(systemImage: "camera.viewfinder", accessibilityLabel: "選択中のキャラをカメラに向ける") {
+                    faceCameraTrigger += 1
+                }
+
+                placementToolButton(systemImage: "trash", accessibilityLabel: "選択中のキャラを削除", role: .destructive) {
+                    removeSelectedTrigger += 1
+                }
+            }
+            .padding(.horizontal, 18)
+            .padding(.vertical, 10)
+            .background(.ultraThinMaterial)
+        }
+    }
+
+    private func placementToolButton(
+        systemImage: String,
+        accessibilityLabel: String,
+        role: ButtonRole? = nil,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(role: role, action: action) {
+            Image(systemName: systemImage)
+                .font(.headline)
+                .frame(maxWidth: .infinity)
+                .frame(height: 38)
+        }
+        .buttonStyle(.bordered)
+        .accessibilityLabel(accessibilityLabel)
     }
 
     private var selectedAsset: CharacterARAsset? {
@@ -218,6 +319,8 @@ struct ARCameraScreen: View {
 
     private func select(_ character: ToyCharacter) {
         selectedCharacterID = character.id
+        selectedPlacementName = nil
+        clearPlacementSelectionTrigger += 1
         character.lastUsedAt = Date()
         try? modelContext.save()
     }
