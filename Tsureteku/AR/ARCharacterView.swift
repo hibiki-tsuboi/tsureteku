@@ -331,7 +331,11 @@ struct ARCharacterView: UIViewRepresentable {
             }
 
             let anchorPosition = placement.anchor.position(relativeTo: nil)
-            placement.entity.orientation = orientationFacingCamera(anchorPosition: anchorPosition, arView: arView)
+            placement.entity.orientation = orientationFacingCamera(
+                anchorPosition: anchorPosition,
+                arView: arView,
+                yawDegrees: placement.yawCorrectionDegrees
+            )
             onStatus("カメラの方向に向けました。")
         }
 
@@ -402,6 +406,7 @@ struct ARCharacterView: UIViewRepresentable {
                 entity: entity,
                 name: asset.name,
                 baseScale: entity.scale,
+                yawCorrectionDegrees: 0,
                 selectionMarker: selectionMarker
             )
             placements.append(placement)
@@ -444,6 +449,7 @@ struct ARCharacterView: UIViewRepresentable {
                 entity: entity,
                 name: asset.name,
                 baseScale: entity.scale,
+                yawCorrectionDegrees: asset.modelYawDegrees,
                 selectionMarker: selectionMarker
             )
             placements.append(placement)
@@ -481,7 +487,20 @@ struct ARCharacterView: UIViewRepresentable {
             arView: ARView,
             yawDegrees: Float
         ) -> simd_quatf {
-            let baseOrientation = orientationFacingCamera(from: worldTransform, arView: arView)
+            let anchorPosition = SIMD3<Float>(
+                worldTransform.columns.3.x,
+                worldTransform.columns.3.y,
+                worldTransform.columns.3.z
+            )
+            return orientationFacingCamera(anchorPosition: anchorPosition, arView: arView, yawDegrees: yawDegrees)
+        }
+
+        private func orientationFacingCamera(
+            anchorPosition: SIMD3<Float>,
+            arView: ARView,
+            yawDegrees: Float
+        ) -> simd_quatf {
+            let baseOrientation = orientationFacingCamera(anchorPosition: anchorPosition, arView: arView)
             let adjustment = simd_quatf(angle: yawDegrees * .pi / 180, axis: [0, 1, 0])
             return simd_mul(baseOrientation, adjustment)
         }
@@ -587,6 +606,7 @@ struct ARCharacterView: UIViewRepresentable {
             let entity: Entity
             let name: String
             let baseScale: SIMD3<Float>
+            let yawCorrectionDegrees: Float
             let selectionMarker: Entity
         }
     }

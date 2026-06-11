@@ -25,6 +25,7 @@ struct AddCharacterView: View {
     @State private var alphaThreshold = 0.1
     @State private var trimPadding = 0.04
     @State private var defaultSizeMeters = 0.34
+    @State private var activeProcessingID: UUID?
 
     var body: some View {
         NavigationStack {
@@ -82,12 +83,14 @@ struct AddCharacterView: View {
                         } label: {
                             Label("自動調整", systemImage: "wand.and.sparkles")
                         }
+                        .disabled(isProcessing)
 
                         Button {
                             isManualTrimPresented = true
                         } label: {
                             Label("手動トリミング", systemImage: "crop")
                         }
+                        .disabled(isProcessing)
                     }
 
                     Section("AR") {
@@ -120,7 +123,7 @@ struct AddCharacterView: View {
 
                 ToolbarItem(placement: .confirmationAction) {
                     Button("保存", action: saveCharacter)
-                        .disabled(!canSave)
+                        .disabled(!canSave || isProcessing)
                 }
             }
             .sheet(isPresented: $isCameraPresented) {
@@ -144,6 +147,9 @@ struct AddCharacterView: View {
                 Task {
                     await loadPhotoItem(newItem)
                 }
+            }
+            .onDisappear {
+                activeProcessingID = nil
             }
         }
     }
@@ -195,42 +201,72 @@ struct AddCharacterView: View {
     }
 
     private func process(_ image: UIImage) {
+        let processingID = UUID()
+        activeProcessingID = processingID
         isProcessing = true
         errorMessage = nil
+        sourceImage = nil
+        cutoutImage = nil
 
-        let preparedImage = ImagePreparation.normalizedAndScaled(image)
-        sourceImage = preparedImage
+        DispatchQueue.global(qos: .userInitiated).async {
+            let result = CharacterImageProcessor.process(image)
 
-        do {
-            cutoutImage = try SubjectCutoutService.makeCutout(from: preparedImage)
-        } catch {
-            cutoutImage = preparedImage
-            errorMessage = "自動切り抜きに失敗したため、元画像で登録します。"
+            DispatchQueue.main.async {
+                guard activeProcessingID == processingID else {
+                    return
+                }
+
+                sourceImage = result.sourceImage
+                cutoutImage = result.cutoutImage
+                errorMessage = result.warningMessage
+
+                if characterName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    characterName = "ぬいぐるみ"
+                }
+
+                isProcessing = false
+                activeProcessingID = nil
+            }
         }
-
-        if characterName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            characterName = "ぬいぐるみ"
-        }
-
-        isProcessing = false
     }
 
     private func applyCutoutRefinement() {
-        if let sourceImage,
-           let refinedCutout = try? SubjectCutoutService.makeCutout(from: sourceImage),
-           let trimmedImage = ImageCropService.trimTransparentPixels(
-            refinedCutout,
-            alphaThreshold: UInt8(alphaThreshold * 255),
-            paddingRatio: trimPadding
-           ) {
-            cutoutImage = trimmedImage
-        } else if let cutoutImage,
-                  let trimmedImage = ImageCropService.trimTransparentPixels(
-                    cutoutImage,
-                    alphaThreshold: UInt8(alphaThreshold * 255),
-                    paddingRatio: trimPadding
-                  ) {
-            self.cutoutImage = trimmedImage
+        guard sourceImage != nil || cutoutImage != nil else {
+            return
+        }
+
+        let processingID = UUID()
+        activeProcessingID = processingID
+        isProcessing = true
+        errorMessage = nil
+
+        let sourceImage = sourceImage
+        let cutoutImage = cutoutImage
+        let alphaThreshold = UInt8(alphaThreshold * 255)
+        let trimPadding = trimPadding
+
+        DispatchQueue.global(qos: .userInitiated).async {
+            let refinedImage = CharacterImageProcessor.refineCutout(
+                sourceImage: sourceImage,
+                cutoutImage: cutoutImage,
+                alphaThreshold: alphaThreshold,
+                paddingRatio: trimPadding
+            )
+
+            DispatchQueue.main.async {
+                guard activeProcessingID == processingID else {
+                    return
+                }
+
+                if let refinedImage {
+                    self.cutoutImage = refinedImage
+                } else {
+                    errorMessage = "切り抜きを調整できませんでした。"
+                }
+
+                isProcessing = false
+                activeProcessingID = nil
+            }
         }
     }
 
@@ -259,6 +295,60 @@ struct AddCharacterView: View {
             errorMessage = error.localizedDescription
         }
     }
+}
+
+private enum CharacterImageProcessor {
+    static func process(_ image: UIImage) -> CharacterImageProcessingResult {
+        let preparedImage = ImagePreparation.normalizedAndScaled(image)
+
+        do {
+            let cutoutImage = try SubjectCutoutService.makeCutout(from: preparedImage)
+            return CharacterImageProcessingResult(
+                sourceImage: preparedImage,
+                cutoutImage: cutoutImage,
+                warningMessage: nil
+            )
+        } catch {
+            return CharacterImageProcessingResult(
+                sourceImage: preparedImage,
+                cutoutImage: preparedImage,
+                warningMessage: "自動切り抜きに失敗したため、元画像で登録します。"
+            )
+        }
+    }
+
+    static func refineCutout(
+        sourceImage: UIImage?,
+        cutoutImage: UIImage?,
+        alphaThreshold: UInt8,
+        paddingRatio: Double
+    ) -> UIImage? {
+        if let sourceImage,
+           let refinedCutout = try? SubjectCutoutService.makeCutout(from: sourceImage),
+           let trimmedImage = ImageCropService.trimTransparentPixels(
+            refinedCutout,
+            alphaThreshold: alphaThreshold,
+            paddingRatio: paddingRatio
+           ) {
+            return trimmedImage
+        }
+
+        guard let cutoutImage else {
+            return nil
+        }
+
+        return ImageCropService.trimTransparentPixels(
+            cutoutImage,
+            alphaThreshold: alphaThreshold,
+            paddingRatio: paddingRatio
+        )
+    }
+}
+
+private struct CharacterImageProcessingResult {
+    let sourceImage: UIImage
+    let cutoutImage: UIImage
+    let warningMessage: String?
 }
 
 #Preview {
