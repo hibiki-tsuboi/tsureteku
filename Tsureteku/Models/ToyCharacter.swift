@@ -17,6 +17,8 @@ final class ToyCharacter {
     var modelFileName: String? = nil
     var objectCaptureDirectoryName: String? = nil
     var defaultSizeMeters: Double = 0.34
+    var modelYawDegrees: Double = 0
+    var modelVerticalOffsetMeters: Double = 0
     var createdAt: Date
     var updatedAt: Date
     var lastUsedAt: Date?
@@ -29,6 +31,8 @@ final class ToyCharacter {
         modelFileName: String? = nil,
         objectCaptureDirectoryName: String? = nil,
         defaultSizeMeters: Double = 0.34,
+        modelYawDegrees: Double = 0,
+        modelVerticalOffsetMeters: Double = 0,
         createdAt: Date = Date(),
         updatedAt: Date = Date(),
         lastUsedAt: Date? = nil
@@ -40,6 +44,8 @@ final class ToyCharacter {
         self.modelFileName = modelFileName
         self.objectCaptureDirectoryName = objectCaptureDirectoryName
         self.defaultSizeMeters = defaultSizeMeters
+        self.modelYawDegrees = modelYawDegrees
+        self.modelVerticalOffsetMeters = modelVerticalOffsetMeters
         self.createdAt = createdAt
         self.updatedAt = updatedAt
         self.lastUsedAt = lastUsedAt

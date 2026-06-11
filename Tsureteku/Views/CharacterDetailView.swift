@@ -66,6 +66,12 @@ struct CharacterDetailView: View {
                 }
 
                 if character.modelFileName != nil {
+                    NavigationLink {
+                        ModelAdjustmentView(character: character)
+                    } label: {
+                        Label("3Dモデルを確認・調整", systemImage: "cube")
+                    }
+
                     Button(role: .destructive) {
                         removeModel()
                     } label: {
@@ -111,6 +117,8 @@ struct CharacterDetailView: View {
 
             CharacterImageStore.deleteModelIfExists(fileName: character.modelFileName)
             character.modelFileName = fileName
+            character.modelYawDegrees = 0
+            character.modelVerticalOffsetMeters = 0
             character.updatedAt = Date()
             save()
         } catch {
@@ -121,6 +129,8 @@ struct CharacterDetailView: View {
     private func removeModel() {
         CharacterImageStore.deleteModelIfExists(fileName: character.modelFileName)
         character.modelFileName = nil
+        character.modelYawDegrees = 0
+        character.modelVerticalOffsetMeters = 0
         character.updatedAt = Date()
         save()
     }

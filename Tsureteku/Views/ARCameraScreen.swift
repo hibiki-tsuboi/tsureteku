@@ -303,7 +303,9 @@ struct ARCameraScreen: View {
             name: selectedCharacter.name,
             cutoutImageFileName: selectedCharacter.cutoutImageFileName,
             modelFileName: selectedCharacter.modelFileName,
-            defaultSizeMeters: Float(selectedCharacter.defaultSizeMeters)
+            defaultSizeMeters: Float(selectedCharacter.defaultSizeMeters),
+            modelYawDegrees: Float(selectedCharacter.modelYawDegrees),
+            modelVerticalOffsetMeters: Float(selectedCharacter.modelVerticalOffsetMeters)
         )
     }
 

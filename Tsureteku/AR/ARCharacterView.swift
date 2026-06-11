@@ -17,6 +17,8 @@ struct CharacterARAsset: Equatable {
     let cutoutImageFileName: String
     let modelFileName: String?
     let defaultSizeMeters: Float
+    let modelYawDegrees: Float
+    let modelVerticalOffsetMeters: Float
 }
 
 struct ARCharacterView: UIViewRepresentable {
@@ -420,8 +422,8 @@ struct ARCharacterView: UIViewRepresentable {
 
             entity.name = asset.name
             entity.scale = SIMD3<Float>(repeating: scale)
-            entity.position.y = max(0, -bounds.min.y * scale)
-            entity.orientation = orientationFacingCamera(from: result.worldTransform, arView: arView)
+            entity.position.y = max(0, -bounds.min.y * scale) + asset.modelVerticalOffsetMeters
+            entity.orientation = modelOrientationFacingCamera(from: result.worldTransform, arView: arView, yawDegrees: asset.modelYawDegrees)
             entity.generateCollisionShapes(recursive: true)
 
             let baseY = bounds.min.y
@@ -472,6 +474,16 @@ struct ARCharacterView: UIViewRepresentable {
             let normalizedDirection = simd_normalize(direction)
             let yaw = atan2(normalizedDirection.x, normalizedDirection.z)
             return simd_quatf(angle: yaw, axis: [0, 1, 0])
+        }
+
+        private func modelOrientationFacingCamera(
+            from worldTransform: simd_float4x4,
+            arView: ARView,
+            yawDegrees: Float
+        ) -> simd_quatf {
+            let baseOrientation = orientationFacingCamera(from: worldTransform, arView: arView)
+            let adjustment = simd_quatf(angle: yawDegrees * .pi / 180, axis: [0, 1, 0])
+            return simd_mul(baseOrientation, adjustment)
         }
 
         private func selectPlacement(_ placement: PlacedCharacter) {
