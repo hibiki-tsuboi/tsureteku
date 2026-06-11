@@ -238,10 +238,16 @@ struct ARCharacterView: UIViewRepresentable {
         }
 
         func capture(in arView: ARView) {
+            let marker = selectedPlacement?.selectionMarker
+            let wasMarkerEnabled = marker?.isEnabled ?? false
+            marker?.isEnabled = false
+
             arView.snapshot(saveToHDR: false) { [weak self] image in
                 guard let self else {
                     return
                 }
+
+                marker?.isEnabled = wasMarkerEnabled
 
                 guard let image else {
                     onCapture(.failure(ARCaptureError.snapshotFailed))
@@ -341,6 +347,7 @@ struct ARCharacterView: UIViewRepresentable {
         }
 
         func clearSelectedPlacement() {
+            selectedPlacement?.selectionMarker.isEnabled = false
             selectedPlacementID = nil
             selectedPlacementName.wrappedValue = nil
         }
@@ -377,6 +384,12 @@ struct ARCharacterView: UIViewRepresentable {
             entity.orientation = orientationFacingCamera(from: result.worldTransform, arView: arView)
             entity.generateCollisionShapes(recursive: false)
 
+            let baseY = -height / 2
+            let shadow = makeContactShadow(width: width * 0.9, depth: max(0.08, width * 0.22), baseY: baseY)
+            let selectionMarker = makeSelectionMarker(width: width * 1.08, depth: max(0.1, width * 0.28), baseY: baseY)
+            entity.addChild(shadow)
+            entity.addChild(selectionMarker)
+
             let anchor = AnchorEntity(raycastResult: result)
             anchor.addChild(entity)
             arView.scene.addAnchor(anchor)
@@ -386,7 +399,8 @@ struct ARCharacterView: UIViewRepresentable {
                 anchor: anchor,
                 entity: entity,
                 name: asset.name,
-                baseScale: entity.scale
+                baseScale: entity.scale,
+                selectionMarker: selectionMarker
             )
             placements.append(placement)
             return placement
@@ -410,6 +424,14 @@ struct ARCharacterView: UIViewRepresentable {
             entity.orientation = orientationFacingCamera(from: result.worldTransform, arView: arView)
             entity.generateCollisionShapes(recursive: true)
 
+            let baseY = bounds.min.y
+            let width = max(bounds.extents.x, asset.defaultSizeMeters / scale) * 1.08
+            let depth = max(bounds.extents.z, bounds.extents.x * 0.5, asset.defaultSizeMeters / scale * 0.28)
+            let shadow = makeContactShadow(width: width, depth: depth, baseY: baseY)
+            let selectionMarker = makeSelectionMarker(width: width * 1.08, depth: depth * 1.08, baseY: baseY)
+            entity.addChild(shadow)
+            entity.addChild(selectionMarker)
+
             let anchor = AnchorEntity(raycastResult: result)
             anchor.addChild(entity)
             arView.scene.addAnchor(anchor)
@@ -419,7 +441,8 @@ struct ARCharacterView: UIViewRepresentable {
                 anchor: anchor,
                 entity: entity,
                 name: asset.name,
-                baseScale: entity.scale
+                baseScale: entity.scale,
+                selectionMarker: selectionMarker
             )
             placements.append(placement)
             return placement
@@ -452,8 +475,69 @@ struct ARCharacterView: UIViewRepresentable {
         }
 
         private func selectPlacement(_ placement: PlacedCharacter) {
+            placements.forEach { $0.selectionMarker.isEnabled = false }
+            placement.selectionMarker.isEnabled = true
             selectedPlacementID = placement.id
             selectedPlacementName.wrappedValue = placement.name
+        }
+
+        private func makeContactShadow(width: Float, depth: Float, baseY: Float) -> ModelEntity {
+            var material = UnlitMaterial(color: UIColor.black.withAlphaComponent(0.18))
+            material.blending = .transparent(opacity: 0.18)
+            material.faceCulling = .none
+
+            let shadow = ModelEntity(
+                mesh: .generateSphere(radius: 0.5),
+                materials: [material]
+            )
+            shadow.name = "contact-shadow"
+            shadow.position = [0, baseY + 0.002, 0]
+            shadow.scale = [max(width, 0.08), 0.003, max(depth, 0.06)]
+            return shadow
+        }
+
+        private func makeSelectionMarker(width: Float, depth: Float, baseY: Float) -> Entity {
+            var material = UnlitMaterial(color: UIColor.systemCyan.withAlphaComponent(0.72))
+            material.blending = .transparent(opacity: 0.72)
+            material.faceCulling = .none
+
+            let marker = Entity()
+            marker.name = "selection-marker"
+            marker.position = [0, baseY + 0.008, 0]
+            marker.isEnabled = false
+
+            let lineThickness = max(min(width, depth) * 0.035, 0.006)
+            let lineHeight: Float = 0.004
+
+            let front = ModelEntity(
+                mesh: .generateBox(width: width, height: lineHeight, depth: lineThickness),
+                materials: [material]
+            )
+            front.position.z = depth / 2
+
+            let back = ModelEntity(
+                mesh: .generateBox(width: width, height: lineHeight, depth: lineThickness),
+                materials: [material]
+            )
+            back.position.z = -depth / 2
+
+            let left = ModelEntity(
+                mesh: .generateBox(width: lineThickness, height: lineHeight, depth: depth),
+                materials: [material]
+            )
+            left.position.x = -width / 2
+
+            let right = ModelEntity(
+                mesh: .generateBox(width: lineThickness, height: lineHeight, depth: depth),
+                materials: [material]
+            )
+            right.position.x = width / 2
+
+            marker.addChild(front)
+            marker.addChild(back)
+            marker.addChild(left)
+            marker.addChild(right)
+            return marker
         }
 
         private func placement(containing entity: Entity) -> PlacedCharacter? {
@@ -491,6 +575,7 @@ struct ARCharacterView: UIViewRepresentable {
             let entity: Entity
             let name: String
             let baseScale: SIMD3<Float>
+            let selectionMarker: Entity
         }
     }
 }
