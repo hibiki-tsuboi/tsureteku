@@ -20,11 +20,16 @@ struct ContentView: View {
                 .tabItem {
                     Label("キャラ", systemImage: "teddybear")
                 }
+
+            CapturedPhotoHistoryView()
+                .tabItem {
+                    Label("履歴", systemImage: "photo.stack")
+                }
         }
     }
 }
 
 #Preview {
     ContentView()
-        .modelContainer(for: ToyCharacter.self, inMemory: true)
+        .modelContainer(for: [ToyCharacter.self, CapturedPhoto.self], inMemory: true)
 }

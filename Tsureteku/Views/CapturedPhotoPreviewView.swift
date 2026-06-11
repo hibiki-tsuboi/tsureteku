@@ -12,6 +12,7 @@ struct CapturedPhotoPreviewView: View {
     @Environment(\.dismiss) private var dismiss
 
     let image: UIImage
+    var onSave: (UIImage, @escaping (Result<Void, Error>) -> Void) -> Void
     var onSaveCompleted: (Result<Void, Error>) -> Void
 
     @State private var isSaving = false
@@ -113,7 +114,7 @@ struct CapturedPhotoPreviewView: View {
         isSaving = true
         statusMessage = "保存しています..."
 
-        PhotoLibrarySaver.save(image) { result in
+        onSave(image) { result in
             isSaving = false
 
             switch result {
@@ -129,7 +130,7 @@ struct CapturedPhotoPreviewView: View {
     }
 }
 
-private struct PhotoShareSheet: UIViewControllerRepresentable {
+struct PhotoShareSheet: UIViewControllerRepresentable {
     let image: UIImage
 
     func makeUIViewController(context: Context) -> UIActivityViewController {
@@ -141,5 +142,8 @@ private struct PhotoShareSheet: UIViewControllerRepresentable {
 }
 
 #Preview {
-    CapturedPhotoPreviewView(image: UIImage(systemName: "photo") ?? UIImage()) { _ in }
+    CapturedPhotoPreviewView(
+        image: UIImage(systemName: "photo") ?? UIImage(),
+        onSave: { _, completion in completion(.success(())) }
+    ) { _ in }
 }

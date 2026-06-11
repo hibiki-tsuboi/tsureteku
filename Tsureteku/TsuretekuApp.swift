@@ -13,6 +13,7 @@ struct TsuretekuApp: App {
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([
             ToyCharacter.self,
+            CapturedPhoto.self,
         ])
         let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
 

@@ -63,7 +63,7 @@ struct ARCameraScreen: View {
             AddCharacterView()
         }
         .fullScreenCover(item: $capturedPhoto) { photo in
-            CapturedPhotoPreviewView(image: photo.image) { result in
+            CapturedPhotoPreviewView(image: photo.image, onSave: saveCapturedPhoto) { result in
                 handlePreviewSave(result)
             }
         }
@@ -350,6 +350,26 @@ struct ARCameraScreen: View {
         }
     }
 
+    private func saveCapturedPhoto(_ image: UIImage, completion: @escaping (Result<Void, Error>) -> Void) {
+        PhotoLibrarySaver.save(image) { result in
+            switch result {
+            case .success:
+                do {
+                    let fileName = try CapturedPhotoStore.save(image)
+                    let photo = CapturedPhoto(imageFileName: fileName)
+                    modelContext.insert(photo)
+                    try modelContext.save()
+                    completion(.success(()))
+                } catch {
+                    completion(.failure(error))
+                }
+
+            case .failure(let error):
+                completion(.failure(error))
+            }
+        }
+    }
+
     private func showStatus(_ message: String) {
         withAnimation(.easeInOut(duration: 0.2)) {
             statusMessage = message
@@ -373,5 +393,5 @@ private struct CapturedARPhoto: Identifiable {
 
 #Preview {
     ARCameraScreen()
-        .modelContainer(for: ToyCharacter.self, inMemory: true)
+        .modelContainer(for: [ToyCharacter.self, CapturedPhoto.self], inMemory: true)
 }
