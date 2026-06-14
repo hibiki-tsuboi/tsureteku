@@ -13,7 +13,6 @@ struct CharacterLibraryView: View {
     @Query(sort: \ToyCharacter.createdAt, order: .reverse) private var characters: [ToyCharacter]
 
     @State private var isAddingCharacter = false
-    @State private var pendingDeletionCharacter: ToyCharacter?
 
     var body: some View {
         NavigationStack {
@@ -29,7 +28,7 @@ struct CharacterLibraryView: View {
                                 characterRow(character)
                             }
                         }
-                        .onDelete(perform: requestDeletion)
+                        .onDelete(perform: deleteCharacters)
                     }
                     .listStyle(.plain)
                 }
@@ -48,26 +47,6 @@ struct CharacterLibraryView: View {
             }
             .sheet(isPresented: $isAddingCharacter) {
                 AddCharacterView()
-            }
-            .confirmationDialog(
-                "このキャラを削除しますか？",
-                isPresented: Binding(
-                    get: { pendingDeletionCharacter != nil },
-                    set: { isPresented in
-                        if !isPresented {
-                            pendingDeletionCharacter = nil
-                        }
-                    }
-                ),
-                titleVisibility: .visible,
-                presenting: pendingDeletionCharacter
-            ) { character in
-                Button("削除", role: .destructive) {
-                    deleteCharacter(character)
-                }
-                Button("キャンセル", role: .cancel) {}
-            } message: { character in
-                Text("「\(character.name)」を削除します。登録した写真と3Dモデルも削除され、元に戻せません。")
             }
         }
     }
@@ -101,23 +80,17 @@ struct CharacterLibraryView: View {
         .padding(.vertical, 6)
     }
 
-    private func requestDeletion(offsets: IndexSet) {
-        guard let index = offsets.first else {
-            return
+    private func deleteCharacters(offsets: IndexSet) {
+        for index in offsets {
+            let character = characters[index]
+            CharacterImageStore.deleteIfExists(fileName: character.originalImageFileName, kind: .original)
+            CharacterImageStore.deleteIfExists(fileName: character.cutoutImageFileName, kind: .cutout)
+            CharacterImageStore.deleteModelIfExists(fileName: character.modelFileName)
+            CharacterImageStore.deleteObjectCaptureDirectoryIfExists(directoryName: character.objectCaptureDirectoryName)
+            modelContext.delete(character)
         }
 
-        pendingDeletionCharacter = characters[index]
-    }
-
-    private func deleteCharacter(_ character: ToyCharacter) {
-        CharacterImageStore.deleteIfExists(fileName: character.originalImageFileName, kind: .original)
-        CharacterImageStore.deleteIfExists(fileName: character.cutoutImageFileName, kind: .cutout)
-        CharacterImageStore.deleteModelIfExists(fileName: character.modelFileName)
-        CharacterImageStore.deleteObjectCaptureDirectoryIfExists(directoryName: character.objectCaptureDirectoryName)
-        modelContext.delete(character)
         try? modelContext.save()
-
-        pendingDeletionCharacter = nil
     }
 }
 
