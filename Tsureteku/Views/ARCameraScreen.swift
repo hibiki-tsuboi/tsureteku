@@ -156,8 +156,6 @@ struct ARCameraScreen: View {
             .ignoresSafeArea()
 
             VStack(spacing: 0) {
-                landingHeader
-
                 if characters.isEmpty {
                     Spacer()
                     WelcomeEmptyState(
@@ -173,42 +171,6 @@ struct ARCameraScreen: View {
                 }
             }
         }
-    }
-
-    private var landingHeader: some View {
-        HStack {
-            brandPill
-
-            Spacer()
-
-            if !characters.isEmpty {
-                Button {
-                    isAddingCharacter = true
-                } label: {
-                    Image(systemName: "plus")
-                        .font(.headline)
-                        .frame(width: 42, height: 42)
-                }
-                .buttonStyle(.borderedProminent)
-                .clipShape(Circle())
-                .accessibilityLabel("キャラ追加")
-            }
-        }
-        .padding(.horizontal, 18)
-        .padding(.top, 12)
-    }
-
-    private var brandPill: some View {
-        HStack(spacing: 6) {
-            Image(systemName: "cube.fill")
-            Text("つれてく")
-        }
-        .font(.system(.headline, design: .rounded).weight(.bold))
-        .foregroundStyle(.white)
-        .padding(.horizontal, 14)
-        .padding(.vertical, 9)
-        .background(LinearGradient.brand, in: Capsule())
-        .shadow(color: BrandColor.purple.opacity(0.35), radius: 8, y: 4)
     }
 
     private var launchContent: some View {
