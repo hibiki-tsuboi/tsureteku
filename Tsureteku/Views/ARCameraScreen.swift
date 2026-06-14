@@ -470,6 +470,13 @@ struct ARCameraScreen: View {
 
                 Spacer()
 
+                Label("\(Int(selectedCharacter.defaultSizeMeters * 100))cm", systemImage: "ruler")
+                    .font(.caption.weight(.semibold).monospacedDigit())
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(.thinMaterial, in: Capsule())
+
                 Text(selectedCharacter.modelFileName == nil ? "2D" : "3D")
                     .font(.caption.weight(.bold))
                     .foregroundStyle(.secondary)

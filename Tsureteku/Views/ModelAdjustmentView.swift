@@ -14,6 +14,8 @@ struct ModelAdjustmentView: View {
     @Environment(\.modelContext) private var modelContext
     @Bindable var character: ToyCharacter
 
+    @State private var nativeSizeMeters: Double?
+
     private var modelURL: URL? {
         guard let modelFileName = character.modelFileName else {
             return nil
@@ -71,6 +73,14 @@ struct ModelAdjustmentView: View {
                         .frame(width: 48, alignment: .trailing)
                 }
 
+                if let nativeSizeMeters {
+                    Button {
+                        applyRealSize(nativeSizeMeters)
+                    } label: {
+                        Label("実物大にする（約\(Int((nativeSizeMeters * 100).rounded()))cm）", systemImage: "ruler")
+                    }
+                }
+
                 Button {
                     resetAdjustments()
                 } label: {
@@ -80,6 +90,9 @@ struct ModelAdjustmentView: View {
         }
         .navigationTitle("3Dモデル調整")
         .navigationBarTitleDisplayMode(.inline)
+        .task(id: character.modelFileName) {
+            await loadNativeSize()
+        }
     }
 
     @ViewBuilder
@@ -111,6 +124,27 @@ struct ModelAdjustmentView: View {
         character.modelYawDegrees = 0
         character.modelVerticalOffsetMeters = 0
         save()
+    }
+
+    /// 撮影されたモデルの実寸（最大辺の長さ）をサイズスライダーの範囲内で適用する。
+    private func applyRealSize(_ meters: Double) {
+        character.defaultSizeMeters = min(max(meters, 0.12), 1.2)
+        save()
+    }
+
+    /// USDZの実寸（最大辺）を読み込んで「実物大にする」ボタンに表示する。
+    private func loadNativeSize() async {
+        guard let modelURL, let entity = try? await Entity(contentsOf: modelURL) else {
+            nativeSizeMeters = nil
+            return
+        }
+
+        let bounds = entity.visualBounds(recursive: true, relativeTo: entity)
+        let maxExtent = max(bounds.extents.x, bounds.extents.y, bounds.extents.z)
+
+        if maxExtent > 0 {
+            nativeSizeMeters = Double(maxExtent)
+        }
     }
 
     private func save() {

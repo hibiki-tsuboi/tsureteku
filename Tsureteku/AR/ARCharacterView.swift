@@ -189,7 +189,7 @@ struct ARCharacterView: UIViewRepresentable {
 
             let coachingOverlay = ARCoachingOverlayView()
             coachingOverlay.session = arView.session
-            coachingOverlay.goal = .horizontalPlane
+            coachingOverlay.goal = .anyPlane
             coachingOverlay.activatesAutomatically = true
             coachingOverlay.translatesAutoresizingMaskIntoConstraints = false
             arView.addSubview(coachingOverlay)
@@ -235,7 +235,7 @@ struct ARCharacterView: UIViewRepresentable {
             }
 
             let configuration = ARWorldTrackingConfiguration()
-            configuration.planeDetection = [.horizontal]
+            configuration.planeDetection = [.horizontal, .vertical]
             configuration.environmentTexturing = .automatic
 
             // 対応端末では人物オクルージョンを有効にし、人の前後に推しが自然に回り込むようにする。
@@ -245,7 +245,7 @@ struct ARCharacterView: UIViewRepresentable {
 
             arView.session.run(configuration, options: [.removeExistingAnchors, .resetTracking])
 
-            coachingOverlay?.goal = .horizontalPlane
+            coachingOverlay?.goal = .anyPlane
             coachingOverlay?.activatesAutomatically = true
         }
 
@@ -399,10 +399,10 @@ struct ARCharacterView: UIViewRepresentable {
                 return
             }
 
-            let results = arView.raycast(from: location, allowing: .estimatedPlane, alignment: .horizontal)
+            let results = arView.raycast(from: location, allowing: .estimatedPlane, alignment: .any)
 
             guard let result = results.first else {
-                onStatus("平面が見つかりません。")
+                onStatus("平面が見つかりません。床や壁にカメラを向けてください。")
                 return
             }
 
