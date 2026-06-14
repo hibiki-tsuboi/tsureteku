@@ -611,10 +611,11 @@ struct ARCharacterView: UIViewRepresentable {
             let baseY = bounds.min.y
             let width = max(bounds.extents.x, asset.defaultSizeMeters / scale) * 1.08
             let depth = max(bounds.extents.z, bounds.extents.x * 0.5, asset.defaultSizeMeters / scale * 0.28)
-            let shadow = makeContactShadow(width: width, depth: depth, baseY: baseY)
             let selectionMarker = makeSelectionMarker(width: width * 1.08, depth: depth * 1.08, baseY: baseY)
-            entity.addChild(shadow)
             entity.addChild(selectionMarker)
+
+            // 3Dモデルは床面に実際の影を落とす（疑似的な接地影より自然）。
+            entity.components.set(GroundingShadowComponent(castsShadow: true))
 
             let anchor = AnchorEntity(raycastResult: result)
             anchor.addChild(entity)
