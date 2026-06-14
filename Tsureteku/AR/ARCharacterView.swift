@@ -693,23 +693,10 @@ struct ARCharacterView: UIViewRepresentable {
         /// 置いた推しに“動き”をつける。USDZにアニメーションがあれば再生し、
         /// 無ければふわふわ浮くアイドルモーションを加算アニメで再生する（移動・拡大・回転の操作と競合しない）。
         private func startIdleAnimation(for entity: Entity) {
+            // USDZにアニメーションがある場合のみ再生する。
+            // （手続き的な浮遊アニメは transform を壊して巨大化・位置ずれを招くため使わない）
             if let clip = idleAnimationClip(in: entity) {
                 clip.entity.playAnimation(clip.resource.repeat(), transitionDuration: 0.4)
-                return
-            }
-
-            let bob = FromToByAnimation(
-                name: "idle-bob",
-                by: Transform(translation: SIMD3<Float>(0, 0.012, 0)),
-                duration: 1.4,
-                timing: .easeInOut,
-                isAdditive: true,
-                bindTarget: .transform,
-                repeatMode: .autoReverse
-            )
-
-            if let resource = try? AnimationResource.generate(with: bob) {
-                entity.playAnimation(resource.repeat())
             }
         }
 
