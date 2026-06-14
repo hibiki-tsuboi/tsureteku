@@ -38,7 +38,8 @@ struct CapturedPhotoHistoryView: View {
                     .background(Color(.systemGroupedBackground))
                 }
             }
-            .navigationTitle("履歴")
+            .navigationTitle("")
+            .navigationBarTitleDisplayMode(.inline)
         }
     }
 

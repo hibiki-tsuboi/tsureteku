@@ -33,7 +33,8 @@ struct CharacterLibraryView: View {
                     .listStyle(.plain)
                 }
             }
-            .navigationTitle("推し")
+            .navigationTitle("")
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 if !characters.isEmpty {
                     ToolbarItem(placement: .primaryAction) {
