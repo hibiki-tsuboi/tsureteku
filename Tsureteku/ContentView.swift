@@ -26,6 +26,7 @@ struct ContentView: View {
                     Label("履歴", systemImage: "photo.stack")
                 }
         }
+        .preferredColorScheme(.light)
     }
 }
 
