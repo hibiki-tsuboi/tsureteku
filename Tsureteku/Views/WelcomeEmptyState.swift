@@ -72,9 +72,9 @@ struct BrandButtonStyle: ButtonStyle {
 #Preview {
     WelcomeEmptyState(
         icon: "teddybear.fill",
-        title: "ぬいぐるみを連れていこう",
-        message: "お気に入りのぬいぐるみを撮って登録すると、ARで一緒に写真が撮れるよ。",
-        actionTitle: "最初のぬいぐるみを登録",
+        title: "推しをつれていこう",
+        message: "お気に入りの推しを撮って登録すると、ARで一緒に写真が撮れるよ。",
+        actionTitle: "最初の推しを登録",
         action: {}
     )
 }

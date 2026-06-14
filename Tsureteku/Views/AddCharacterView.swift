@@ -112,7 +112,7 @@ struct AddCharacterView: View {
                     }
                 }
             }
-            .navigationTitle("キャラ追加")
+            .navigationTitle("推し追加")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -174,7 +174,7 @@ struct AddCharacterView: View {
                 VStack(spacing: 10) {
                     Image(systemName: "teddybear")
                         .font(.system(size: 42))
-                    Text("ぬいぐるみの写真")
+                    Text("推しの写真")
                         .font(.headline)
                 }
                 .foregroundStyle(.secondary)
@@ -221,7 +221,7 @@ struct AddCharacterView: View {
                 errorMessage = result.warningMessage
 
                 if characterName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                    characterName = "ぬいぐるみ"
+                    characterName = "推し"
                 }
 
                 isProcessing = false

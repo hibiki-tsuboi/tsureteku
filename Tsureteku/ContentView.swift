@@ -20,7 +20,7 @@ struct ContentView: View {
             CharacterLibraryView()
                 .tabItem {
                     Image(systemName: "teddybear")
-                        .accessibilityLabel("キャラ")
+                        .accessibilityLabel("推し")
                 }
 
             CapturedPhotoHistoryView()

@@ -39,33 +39,33 @@ struct ObjectCapturePreparationView: View {
                 PreparationChecklistRow(
                     iconName: "light.max",
                     title: "明るい場所に置く",
-                    description: "影が強すぎない場所で、ぬいぐるみ全体が見えるようにします。"
+                    description: "影が強すぎない場所で、推し全体が見えるようにします。"
                 )
 
                 PreparationChecklistRow(
                     iconName: "hand.raised",
-                    title: "ぬいぐるみは動かさない",
+                    title: "推しは動かさない",
                     description: "撮影中は本体を固定し、iPhoneだけをゆっくり動かします。"
                 )
 
                 PreparationChecklistRow(
                     iconName: "photo.stack",
                     title: "20枚以上撮る",
-                    description: "少ない枚数では3Dキャラ作成に進めません。角度を変えて一周撮ります。"
+                    description: "少ない枚数では3Dモデル作成に進めません。角度を変えて一周撮ります。"
                 )
             }
 
             Section("撮影の流れ") {
                 CaptureTutorialStepRow(
                     number: 1,
-                    title: "ぬいぐるみを認識",
+                    title: "推しを認識",
                     description: "画面内に全体を入れて、対象を検出します。"
                 )
 
                 CaptureTutorialStepRow(
                     number: 2,
                     title: "周りを撮影",
-                    description: "ぬいぐるみの周囲をゆっくり回りながら、正面と側面を撮ります。"
+                    description: "推しの周囲をゆっくり回りながら、正面と側面を撮ります。"
                 )
 
                 CaptureTutorialStepRow(
@@ -76,7 +76,7 @@ struct ObjectCapturePreparationView: View {
 
                 CaptureTutorialStepRow(
                     number: 4,
-                    title: "3Dキャラを作成",
+                    title: "3Dモデルを作成",
                     description: "撮影データからUSDZモデルを作り、AR配置で使えるようにします。"
                 )
             }
@@ -132,7 +132,7 @@ struct ObjectCapturePreparationView: View {
             .buttonStyle(.borderedProminent)
             .controlSize(.large)
 
-            Text("撮影中はぬいぐるみを固定し、iPhoneを動かします。")
+            Text("撮影中は推しを固定し、iPhoneを動かします。")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
@@ -206,7 +206,7 @@ private struct CaptureTutorialStepRow: View {
     NavigationStack {
         ObjectCapturePreparationView(
             character: ToyCharacter(
-                name: "ぬいぐるみ",
+                name: "推し",
                 originalImageFileName: "preview-original.png",
                 cutoutImageFileName: "preview-cutout.png"
             )

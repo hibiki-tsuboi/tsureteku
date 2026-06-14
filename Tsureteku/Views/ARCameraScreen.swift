@@ -58,7 +58,7 @@ struct ARCameraScreen: View {
             }
             Button("閉じる", role: .cancel) {}
         } message: {
-            Text("ARでぬいぐるみと撮影するにはカメラの利用を許可してください。設定アプリの「つれてく」から変更できます。")
+            Text("ARで推しと撮影するにはカメラの利用を許可してください。設定アプリの「つれてく」から変更できます。")
         }
         .toolbar(isARActive ? .hidden : .visible, for: .tabBar)
     }
@@ -147,7 +147,7 @@ struct ARCameraScreen: View {
                 }
                 .buttonStyle(.borderedProminent)
                 .clipShape(Circle())
-                .accessibilityLabel("キャラ追加")
+                .accessibilityLabel("推し追加")
             }
         }
         .padding(.horizontal, 18)
@@ -170,9 +170,9 @@ struct ARCameraScreen: View {
                     Spacer()
                     WelcomeEmptyState(
                         icon: "teddybear.fill",
-                        title: "ぬいぐるみを連れていこう",
-                        message: "お気に入りのぬいぐるみを登録して、ARで一緒に写真を撮ろう！",
-                        actionTitle: "ぬいぐるみを登録",
+                        title: "推しをつれていこう",
+                        message: "お気に入りの推しを登録して、ARで一緒に写真を撮ろう！",
+                        actionTitle: "推しを登録",
                         action: { isAddingCharacter = true }
                     )
                     Spacer()
@@ -203,7 +203,7 @@ struct ARCameraScreen: View {
                     Text("つれてく準備OK！")
                         .font(.system(.title2, design: .rounded).weight(.bold))
 
-                    Text("カメラを起動して、ぬいぐるみと一緒にARで撮影しよう。")
+                    Text("カメラを起動して、推しと一緒にARで撮影しよう。")
                         .font(.callout)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
@@ -259,7 +259,7 @@ struct ARCameraScreen: View {
         .padding(.bottom, 10)
     }
 
-    /// キャラ情報・選択・サイズを1枚にまとめたパネル。
+    /// 推し情報・選択・サイズを1枚にまとめたパネル。
     private var controlPanel: some View {
         VStack(spacing: 10) {
             selectedCharacterSummary
@@ -295,9 +295,9 @@ struct ARCameraScreen: View {
     private var welcomeCard: some View {
         WelcomeEmptyState(
             icon: "teddybear.fill",
-            title: "ぬいぐるみを連れていこう",
-            message: "お気に入りのぬいぐるみを登録して、ARで一緒に写真を撮ろう！",
-            actionTitle: "ぬいぐるみを登録",
+            title: "推しをつれていこう",
+            message: "お気に入りの推しを登録して、ARで一緒に写真を撮ろう！",
+            actionTitle: "推しを登録",
             action: { isAddingCharacter = true }
         )
         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 28))
@@ -386,27 +386,27 @@ struct ARCameraScreen: View {
     private var placementTools: some View {
         if selectedPlacementName != nil {
             HStack(spacing: 10) {
-                placementToolButton(systemImage: "minus.circle", accessibilityLabel: "選択中のキャラを小さく") {
+                placementToolButton(systemImage: "minus.circle", accessibilityLabel: "選択中の推しを小さく") {
                     scaleDownTrigger += 1
                 }
 
-                placementToolButton(systemImage: "plus.circle", accessibilityLabel: "選択中のキャラを大きく") {
+                placementToolButton(systemImage: "plus.circle", accessibilityLabel: "選択中の推しを大きく") {
                     scaleUpTrigger += 1
                 }
 
-                placementToolButton(systemImage: "rotate.left", accessibilityLabel: "選択中のキャラを左に回転") {
+                placementToolButton(systemImage: "rotate.left", accessibilityLabel: "選択中の推しを左に回転") {
                     rotateLeftTrigger += 1
                 }
 
-                placementToolButton(systemImage: "rotate.right", accessibilityLabel: "選択中のキャラを右に回転") {
+                placementToolButton(systemImage: "rotate.right", accessibilityLabel: "選択中の推しを右に回転") {
                     rotateRightTrigger += 1
                 }
 
-                placementToolButton(systemImage: "camera.viewfinder", accessibilityLabel: "選択中のキャラをカメラに向ける") {
+                placementToolButton(systemImage: "camera.viewfinder", accessibilityLabel: "選択中の推しをカメラに向ける") {
                     faceCameraTrigger += 1
                 }
 
-                placementToolButton(systemImage: "trash", accessibilityLabel: "選択中のキャラを削除", role: .destructive) {
+                placementToolButton(systemImage: "trash", accessibilityLabel: "選択中の推しを削除", role: .destructive) {
                     removeSelectedTrigger += 1
                 }
             }

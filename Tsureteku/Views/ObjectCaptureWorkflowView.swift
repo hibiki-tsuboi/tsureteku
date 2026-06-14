@@ -142,7 +142,7 @@ struct ObjectCaptureWorkflowView: View {
 
             if isReconstructing {
                 ContentUnavailableView {
-                    Label("3Dキャラを作成中", systemImage: "cube")
+                    Label("3Dモデルを作成中", systemImage: "cube")
                 } description: {
                     Text("完了までこのままお待ちください。")
                 }
@@ -151,14 +151,14 @@ struct ObjectCaptureWorkflowView: View {
                 ContentUnavailableView {
                     Label("撮影データを保存しました", systemImage: "checkmark.circle")
                 } description: {
-                    Text("このまま3Dキャラを作成できます。")
+                    Text("このまま3Dモデルを作成できます。")
                 }
                 .padding(.horizontal, 24)
             } else {
                 ContentUnavailableView {
                     Label("撮影データが不足しています", systemImage: "exclamationmark.triangle")
                 } description: {
-                    Text("3Dキャラ作成には20枚以上を目安に撮影してください。撮り直すには「撮り直す」をタップしてください。")
+                    Text("3Dモデル作成には20枚以上を目安に撮影してください。撮り直すには「撮り直す」をタップしてください。")
                 }
                 .padding(.horizontal, 24)
             }
@@ -277,7 +277,7 @@ struct ObjectCaptureWorkflowView: View {
                 Button {
                     reconstructModel()
                 } label: {
-                    Label("3Dキャラを作成", systemImage: "cube")
+                    Label("3Dモデルを作成", systemImage: "cube")
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.borderedProminent)
@@ -312,7 +312,7 @@ struct ObjectCaptureWorkflowView: View {
             Button {
                 startDetection()
             } label: {
-                Label("ぬいぐるみを認識", systemImage: "viewfinder")
+                Label("推しを認識", systemImage: "viewfinder")
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(.borderedProminent)
@@ -403,22 +403,22 @@ struct ObjectCaptureWorkflowView: View {
 
     private var stepInstruction: String {
         if userCompletedScanPass {
-            return "表側の撮影が一区切りつきました。必要ならぬいぐるみを裏返して、裏側も撮影します。"
+            return "表側の撮影が一区切りつきました。必要なら推しを裏返して、裏側も撮影します。"
         }
 
         switch captureState {
         case .initializing:
-            return "カメラを準備しています。ぬいぐるみを明るい場所に置いて、全体が見える位置にします。"
+            return "カメラを準備しています。推しを明るい場所に置いて、全体が見える位置にします。"
         case .ready:
-            return "ぬいぐるみ全体を画面に入れて、下のボタンで認識を始めます。"
+            return "推し全体を画面に入れて、下のボタンで認識を始めます。"
         case .detecting:
-            return "画面のガイドに合わせて、ぬいぐるみが見切れない位置で待ちます。"
+            return "画面のガイドに合わせて、推しが見切れない位置で待ちます。"
         case .capturing:
-            return "ぬいぐるみは動かさず、iPhoneをゆっくり回して周りを撮影します。"
+            return "推しは動かさず、iPhoneをゆっくり回して周りを撮影します。"
         case .finishing:
             return "撮影データを保存しています。このまま待ちます。"
         case .completed:
-            return "撮影データができました。枚数が十分なら3Dキャラを作成できます。"
+            return "撮影データができました。枚数が十分なら3Dモデルを作成できます。"
         case .failed:
             return "撮影準備に失敗しました。再開するか、明るさとカメラ許可を確認してください。"
         @unknown default:
@@ -428,24 +428,24 @@ struct ObjectCaptureWorkflowView: View {
 
     private var actionHint: String? {
         if isReconstructing {
-            return "生成が終わると、このキャラの3Dモデルとして登録されます。"
+            return "生成が終わると、この推しの3Dモデルとして登録されます。"
         }
 
         if case .completed = captureState {
             if canGenerateModel {
-                return "作成した3DキャラはAR配置で自動的に使われます。"
+                return "作成した3DモデルはAR配置で自動的に使われます。"
             }
 
-            return "3Dキャラ作成には20枚以上を目安にしてください。あと\(shotsNeededForModel)枚撮ると作成できます。"
+            return "3Dモデル作成には20枚以上を目安にしてください。あと\(shotsNeededForModel)枚撮ると作成できます。"
         }
 
         switch captureState {
         case .ready:
-            return "ぬいぐるみだけが大きく映るようにすると認識しやすくなります。"
+            return "推しだけが大きく映るようにすると認識しやすくなります。"
         case .detecting:
             return "認識できたら「周りを撮影」に進みます。"
         case .capturing:
-            return "\(minimumShotsForModel)枚以上撮ると、3Dキャラ作成に進みやすくなります。"
+            return "\(minimumShotsForModel)枚以上撮ると、3Dモデル作成に進みやすくなります。"
         default:
             return nil
         }
@@ -572,18 +572,18 @@ struct ObjectCaptureWorkflowView: View {
             }
 
             errorMessage = nil
-            statusMessage = "ぬいぐるみ全体が入る位置で検出を開始してください。"
+            statusMessage = "推し全体が入る位置で検出を開始してください。"
 
         case .detecting:
             didRequestDetection = false
             errorMessage = nil
-            statusMessage = "ぬいぐるみを枠内に収めて、準備できたら撮影開始を押してください。"
+            statusMessage = "推しを枠内に収めて、準備できたら撮影開始を押してください。"
 
         case .capturing:
             didRequestDetection = false
             didRequestCapture = false
             errorMessage = nil
-            statusMessage = "端末をゆっくり動かして、ぬいぐるみを一周撮影してください。"
+            statusMessage = "端末をゆっくり動かして、推しを一周撮影してください。"
 
         case .completed:
             didRequestDetection = false
@@ -611,10 +611,10 @@ struct ObjectCaptureWorkflowView: View {
 
         if session.startDetecting() {
             captureState = .detecting
-            statusMessage = "ぬいぐるみを枠内に収めて、準備できたら撮影開始を押してください。"
+            statusMessage = "推しを枠内に収めて、準備できたら撮影開始を押してください。"
         } else {
             didRequestDetection = false
-            statusMessage = "まだ検出を開始できません。カメラをぬいぐるみに向けて、少し待ってからもう一度押してください。"
+            statusMessage = "まだ検出を開始できません。カメラを推しに向けて、少し待ってからもう一度押してください。"
         }
     }
 
@@ -625,7 +625,7 @@ struct ObjectCaptureWorkflowView: View {
         didRequestCapture = true
         session.startCapturing()
         captureState = .capturing
-        statusMessage = "端末をゆっくり動かして、ぬいぐるみを一周撮影してください。"
+        statusMessage = "端末をゆっくり動かして、推しを一周撮影してください。"
     }
 
     private func requestManualCapture() {
@@ -635,7 +635,7 @@ struct ObjectCaptureWorkflowView: View {
 
     private func beginBackSideCapture() {
         userCompletedScanPass = false
-        statusMessage = "裏側の撮影を始めます。ぬいぐるみを裏返してゆっくり撮影してください。"
+        statusMessage = "裏側の撮影を始めます。推しを裏返してゆっくり撮影してください。"
         session.beginNewScanPassAfterFlip()
     }
 
@@ -844,7 +844,7 @@ private enum CaptureWorkflowStep: Int, CaseIterable, Identifiable {
         case .backSide:
             "裏側を撮影"
         case .generate:
-            "3Dキャラ作成"
+            "3Dモデル作成"
         }
     }
 

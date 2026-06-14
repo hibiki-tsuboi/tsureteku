@@ -46,7 +46,7 @@ struct CapturedPhotoHistoryView: View {
         WelcomeEmptyState(
             icon: "photo.stack.fill",
             title: "思い出はまだこれから",
-            message: "ARでぬいぐるみと一緒に撮影すると、ここに写真が並んでいくよ。"
+            message: "ARで推しと一緒に撮影すると、ここに写真が並んでいくよ。"
         )
     }
 }

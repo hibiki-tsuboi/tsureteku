@@ -210,7 +210,7 @@ struct ARCharacterView: UIViewRepresentable {
             }
 
             guard let selectedAsset else {
-                onStatus("キャラを選択してください。")
+                onStatus("推しを選択してください。")
                 return
             }
 
@@ -271,7 +271,7 @@ struct ARCharacterView: UIViewRepresentable {
 
         func removeLastPlacement(in arView: ARView) {
             guard let placement = placements.popLast() else {
-                onStatus("削除できるキャラがありません。")
+                onStatus("削除できる推しがありません。")
                 return
             }
 
@@ -279,12 +279,12 @@ struct ARCharacterView: UIViewRepresentable {
             if selectedPlacementID == placement.id {
                 clearSelectedPlacement()
             }
-            onStatus("最後のキャラを削除しました。")
+            onStatus("最後の推しを削除しました。")
         }
 
         func resetPlacements(in arView: ARView) {
             guard !placements.isEmpty else {
-                onStatus("リセットできるキャラがありません。")
+                onStatus("リセットできる推しがありません。")
                 return
             }
 
@@ -299,7 +299,7 @@ struct ARCharacterView: UIViewRepresentable {
 
         func scaleSelectedPlacement(by factor: Float) {
             guard let placement = selectedPlacement else {
-                onStatus("調整するキャラを選択してください。")
+                onStatus("調整する推しを選択してください。")
                 return
             }
 
@@ -316,7 +316,7 @@ struct ARCharacterView: UIViewRepresentable {
 
         func rotateSelectedPlacement(by angle: Float) {
             guard let placement = selectedPlacement else {
-                onStatus("回転するキャラを選択してください。")
+                onStatus("回転する推しを選択してください。")
                 return
             }
 
@@ -326,7 +326,7 @@ struct ARCharacterView: UIViewRepresentable {
 
         func faceSelectedPlacementToCamera(in arView: ARView) {
             guard let placement = selectedPlacement else {
-                onStatus("向きを変えるキャラを選択してください。")
+                onStatus("向きを変える推しを選択してください。")
                 return
             }
 
@@ -342,7 +342,7 @@ struct ARCharacterView: UIViewRepresentable {
         func removeSelectedPlacement(in arView: ARView) {
             guard let selectedPlacementID,
                   let index = placements.firstIndex(where: { $0.id == selectedPlacementID }) else {
-                onStatus("削除するキャラを選択してください。")
+                onStatus("削除する推しを選択してください。")
                 return
             }
 

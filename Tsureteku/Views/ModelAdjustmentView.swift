@@ -272,7 +272,7 @@ private struct ModelPreview3DView: UIViewRepresentable {
     NavigationStack {
         ModelAdjustmentView(
             character: ToyCharacter(
-                name: "ぬいぐるみ",
+                name: "推し",
                 originalImageFileName: "preview-original.png",
                 cutoutImageFileName: "preview-cutout.png",
                 modelFileName: "preview.usdz"
