@@ -62,12 +62,20 @@ struct CapturedPhotoPreviewView: View {
     private var footer: some View {
         VStack(spacing: 12) {
             if let statusMessage {
-                Text(statusMessage)
-                    .font(.callout)
-                    .foregroundStyle(.primary)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 8)
-                    .background(.ultraThinMaterial, in: Capsule())
+                HStack(spacing: 6) {
+                    if didSave {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundStyle(BrandColor.mint)
+                    }
+
+                    Text(statusMessage)
+                }
+                .font(.callout.weight(.medium))
+                .foregroundStyle(.primary)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 8)
+                .background(.ultraThinMaterial, in: Capsule())
+                .transition(.opacity)
             }
 
             HStack(spacing: 12) {
@@ -87,6 +95,7 @@ struct CapturedPhotoPreviewView: View {
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.borderedProminent)
+                .tint(didSave ? BrandColor.mint : BrandColor.purple)
                 .disabled(isSaving || didSave)
 
                 Button {
@@ -98,7 +107,10 @@ struct CapturedPhotoPreviewView: View {
                 .buttonStyle(.bordered)
                 .tint(.white)
             }
+            .lineLimit(1)
+            .minimumScaleFactor(0.7)
         }
+        .fontDesign(.rounded)
         .controlSize(.large)
         .padding(.horizontal, 16)
         .padding(.top, 14)

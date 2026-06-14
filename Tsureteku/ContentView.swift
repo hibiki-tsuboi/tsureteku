@@ -13,19 +13,23 @@ struct ContentView: View {
         TabView {
             ARCameraScreen()
                 .tabItem {
-                    Label("AR", systemImage: "camera.viewfinder")
+                    Image(systemName: "camera.viewfinder")
+                        .accessibilityLabel("AR")
                 }
 
             CharacterLibraryView()
                 .tabItem {
-                    Label("キャラ", systemImage: "teddybear")
+                    Image(systemName: "teddybear")
+                        .accessibilityLabel("キャラ")
                 }
 
             CapturedPhotoHistoryView()
                 .tabItem {
-                    Label("履歴", systemImage: "photo.stack")
+                    Image(systemName: "photo.stack")
+                        .accessibilityLabel("履歴")
                 }
         }
+        .preferredColorScheme(.light)
     }
 }
 
