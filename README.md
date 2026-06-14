@@ -5,7 +5,7 @@
 ## プロジェクト情報
 
 - **App Category**: エンターテインメント (Entertainment)
-- **Deployment Target**: iOS 18.0 -> iOS 26.0 (※v1.0.0 リリース時)
+- **Deployment Target**: iOS 26.0+
 - **プライバシーポリシー**: [https://hibiki-tsuboi.github.io/tsureteku/privacy-policy](https://hibiki-tsuboi.github.io/tsureteku/privacy-policy)
 - **輸出コンプライアンス**: `ITSAppUsesNonExemptEncryption = NO` (免除対象外の暗号化は不使用)
 - **価格**: 無料 (Free)
