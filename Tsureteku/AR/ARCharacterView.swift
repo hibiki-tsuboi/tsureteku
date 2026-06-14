@@ -353,6 +353,7 @@ struct ARCharacterView: UIViewRepresentable {
             anchor.addChild(entity)
             arView.scene.addAnchor(anchor)
             arView.installGestures([.translation, .rotation, .scale], for: entity)
+            startIdleAnimation(for: entity)
 
             selfieScaleDivisor = divisor
 
@@ -575,6 +576,7 @@ struct ARCharacterView: UIViewRepresentable {
             anchor.addChild(entity)
             arView.scene.addAnchor(anchor)
             arView.installGestures([.translation, .rotation, .scale], for: entity)
+            startIdleAnimation(for: entity)
 
             let placement = PlacedCharacter(
                 anchor: anchor,
@@ -618,6 +620,7 @@ struct ARCharacterView: UIViewRepresentable {
             anchor.addChild(entity)
             arView.scene.addAnchor(anchor)
             arView.installGestures([.translation, .rotation, .scale], for: entity)
+            startIdleAnimation(for: entity)
 
             let placement = PlacedCharacter(
                 anchor: anchor,
@@ -685,6 +688,44 @@ struct ARCharacterView: UIViewRepresentable {
             placement.selectionMarker.isEnabled = true
             selectedPlacementID = placement.id
             selectedPlacementName.wrappedValue = placement.name
+        }
+
+        /// 置いた推しに“動き”をつける。USDZにアニメーションがあれば再生し、
+        /// 無ければふわふわ浮くアイドルモーションを加算アニメで再生する（移動・拡大・回転の操作と競合しない）。
+        private func startIdleAnimation(for entity: Entity) {
+            if let clip = idleAnimationClip(in: entity) {
+                clip.entity.playAnimation(clip.resource.repeat(), transitionDuration: 0.4)
+                return
+            }
+
+            let bob = FromToByAnimation(
+                name: "idle-bob",
+                by: Transform(translation: SIMD3<Float>(0, 0.012, 0)),
+                duration: 1.4,
+                timing: .easeInOut,
+                isAdditive: true,
+                bindTarget: .transform,
+                repeatMode: .autoReverse
+            )
+
+            if let resource = try? AnimationResource.generate(with: bob) {
+                entity.playAnimation(resource.repeat())
+            }
+        }
+
+        /// USDZに埋め込まれた再生可能なアニメーションを、自身または直下の子から探す。
+        private func idleAnimationClip(in entity: Entity) -> (entity: Entity, resource: AnimationResource)? {
+            if let resource = entity.availableAnimations.first {
+                return (entity, resource)
+            }
+
+            for child in entity.children {
+                if let resource = child.availableAnimations.first {
+                    return (child, resource)
+                }
+            }
+
+            return nil
         }
 
         private func makeContactShadow(width: Float, depth: Float, baseY: Float) -> ModelEntity {
