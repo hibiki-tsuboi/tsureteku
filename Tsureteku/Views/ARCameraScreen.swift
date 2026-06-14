@@ -6,6 +6,7 @@
 //
 
 import ARKit
+import AudioToolbox
 import AVFoundation
 import SwiftData
 import SwiftUI
@@ -30,9 +31,14 @@ struct ARCameraScreen: View {
     @State private var isARActive = false
     @State private var isCameraAccessDenied = false
     @State private var isARUnsupported = false
+    @State private var isResetConfirmationPresented = false
+    @State private var captureFlashOpacity = 0.0
     @State private var statusMessage: String?
     @State private var selectedPlacementName: String?
     @State private var capturedPhoto: CapturedARPhoto?
+
+    /// iPadの大画面で操作パネルや案内が間延びしないようにする最大幅。
+    private static let contentMaxWidth: CGFloat = 540
 
     var body: some View {
         ZStack {
@@ -67,6 +73,18 @@ struct ARCameraScreen: View {
         } message: {
             Text("この端末はARに対応していないため、AR撮影は利用できません。")
         }
+        .confirmationDialog(
+            "配置をリセットしますか？",
+            isPresented: $isResetConfirmationPresented,
+            titleVisibility: .visible
+        ) {
+            Button("リセット", role: .destructive) {
+                resetTrigger += 1
+            }
+            Button("キャンセル", role: .cancel) {}
+        } message: {
+            Text("配置した推しがすべて消えます。撮影した写真は残ります。")
+        }
         .toolbar(isARActive ? .hidden : .visible, for: .tabBar)
     }
 
@@ -91,6 +109,11 @@ struct ARCameraScreen: View {
                 onStatus: showStatus
             )
             .ignoresSafeArea()
+
+            Color.white
+                .opacity(captureFlashOpacity)
+                .ignoresSafeArea()
+                .allowsHitTesting(false)
 
             VStack(spacing: 0) {
                 arHeader
@@ -135,7 +158,7 @@ struct ARCameraScreen: View {
                 .accessibilityLabel("最後の配置を削除")
 
                 Button {
-                    resetTrigger += 1
+                    isResetConfirmationPresented = true
                 } label: {
                     Image(systemName: "trash")
                         .font(.headline)
@@ -232,6 +255,8 @@ struct ARCameraScreen: View {
             .buttonStyle(BrandButtonStyle())
             .padding(.bottom, 34)
         }
+        .frame(maxWidth: Self.contentMaxWidth)
+        .frame(maxWidth: .infinity)
     }
 
     private var registeredPreview: some View {
@@ -263,6 +288,8 @@ struct ARCameraScreen: View {
             controlPanel
             captureButton
         }
+        .frame(maxWidth: Self.contentMaxWidth)
+        .frame(maxWidth: .infinity)
         .padding(.bottom, 10)
     }
 
@@ -282,6 +309,7 @@ struct ARCameraScreen: View {
     private var captureButton: some View {
         Button {
             captureTrigger += 1
+            triggerCaptureFeedback()
         } label: {
             ZStack {
                 Circle()
@@ -308,6 +336,7 @@ struct ARCameraScreen: View {
             action: { isAddingCharacter = true }
         )
         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 28))
+        .frame(maxWidth: Self.contentMaxWidth)
         .padding(.horizontal, 24)
     }
 
@@ -510,6 +539,17 @@ struct ARCameraScreen: View {
     private func activateAR() {
         withAnimation(.easeInOut(duration: 0.25)) {
             isARActive = true
+        }
+    }
+
+    /// 撮影時に触覚・シャッター音・一瞬の白フラッシュで「撮れた」手応えを返す。
+    private func triggerCaptureFeedback() {
+        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        AudioServicesPlaySystemSound(1108)
+
+        captureFlashOpacity = 0.9
+        withAnimation(.easeOut(duration: 0.35)) {
+            captureFlashOpacity = 0
         }
     }
 
