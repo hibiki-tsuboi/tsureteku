@@ -15,6 +15,7 @@ struct CharacterDetailView: View {
     @Bindable var character: ToyCharacter
 
     @State private var isImportingModel = false
+    @State private var isModelDeleteConfirmationPresented = false
     @State private var errorMessage: String?
 
     var body: some View {
@@ -74,7 +75,7 @@ struct CharacterDetailView: View {
                     }
 
                     Button(role: .destructive) {
-                        removeModel()
+                        isModelDeleteConfirmationPresented = true
                     } label: {
                         Label("3Dモデル削除", systemImage: "trash")
                     }
@@ -117,6 +118,16 @@ struct CharacterDetailView: View {
             allowedContentTypes: [.usdzModel]
         ) { result in
             importModel(result)
+        }
+        .confirmationDialog(
+            "3Dモデルを削除しますか？",
+            isPresented: $isModelDeleteConfirmationPresented,
+            titleVisibility: .visible
+        ) {
+            Button("削除", role: .destructive, action: removeModel)
+            Button("キャンセル", role: .cancel) {}
+        } message: {
+            Text("削除すると元に戻せません。もう一度3D撮影またはUSDZ登録が必要です。")
         }
     }
 
