@@ -12,7 +12,7 @@ import SwiftData
 struct TsuretekuApp: App {
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([
-            Companion.self,
+            Item.self,
         ])
         let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
 
