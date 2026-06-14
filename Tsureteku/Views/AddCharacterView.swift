@@ -32,7 +32,6 @@ struct AddCharacterView: View {
             Form {
                 Section {
                     TextField("名前", text: $characterName)
-                        .textInputAutocapitalization(.never)
                 }
 
                 Section {

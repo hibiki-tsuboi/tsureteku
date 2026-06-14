@@ -5,6 +5,7 @@
 //  Created by Hibiki Tsuboi on 2026/06/10.
 //
 
+import ARKit
 import AVFoundation
 import SwiftData
 import SwiftUI
@@ -28,6 +29,7 @@ struct ARCameraScreen: View {
     @State private var isAddingCharacter = false
     @State private var isARActive = false
     @State private var isCameraAccessDenied = false
+    @State private var isARUnsupported = false
     @State private var statusMessage: String?
     @State private var selectedPlacementName: String?
     @State private var capturedPhoto: CapturedARPhoto?
@@ -59,6 +61,11 @@ struct ARCameraScreen: View {
             Button("閉じる", role: .cancel) {}
         } message: {
             Text("ARで推しと撮影するにはカメラの利用を許可してください。設定アプリの「つれてく」から変更できます。")
+        }
+        .alert("ARを利用できません", isPresented: $isARUnsupported) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("この端末はARに対応していないため、AR撮影は利用できません。")
         }
         .toolbar(isARActive ? .hidden : .visible, for: .tabBar)
     }
@@ -475,6 +482,11 @@ struct ARCameraScreen: View {
     }
 
     private func startARSession() {
+        guard ARWorldTrackingConfiguration.isSupported else {
+            isARUnsupported = true
+            return
+        }
+
         switch AVCaptureDevice.authorizationStatus(for: .video) {
         case .authorized:
             activateAR()
