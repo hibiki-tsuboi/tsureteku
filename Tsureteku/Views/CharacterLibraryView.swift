@@ -35,11 +35,13 @@ struct CharacterLibraryView: View {
             }
             .navigationTitle("キャラ")
             .toolbar {
-                ToolbarItem(placement: .primaryAction) {
-                    Button {
-                        isAddingCharacter = true
-                    } label: {
-                        Label("追加", systemImage: "plus")
+                if !characters.isEmpty {
+                    ToolbarItem(placement: .primaryAction) {
+                        Button {
+                            isAddingCharacter = true
+                        } label: {
+                            Label("追加", systemImage: "plus")
+                        }
                     }
                 }
             }
@@ -50,16 +52,13 @@ struct CharacterLibraryView: View {
     }
 
     private var emptyState: some View {
-        ContentUnavailableView {
-            Label("キャラなし", systemImage: "teddybear")
-        } actions: {
-            Button {
-                isAddingCharacter = true
-            } label: {
-                Label("追加", systemImage: "plus")
-            }
-            .buttonStyle(.borderedProminent)
-        }
+        WelcomeEmptyState(
+            icon: "teddybear.fill",
+            title: "ぬいぐるみを連れていこう",
+            message: "お気に入りのぬいぐるみを撮って登録すると、ARで一緒に写真が撮れるよ。",
+            actionTitle: "最初のぬいぐるみを登録",
+            action: { isAddingCharacter = true }
+        )
     }
 
     private func characterRow(_ character: ToyCharacter) -> some View {

@@ -25,11 +25,37 @@ struct ARCameraScreen: View {
     @State private var removeSelectedTrigger = 0
     @State private var clearPlacementSelectionTrigger = 0
     @State private var isAddingCharacter = false
+    @State private var isARActive = false
     @State private var statusMessage: String?
     @State private var selectedPlacementName: String?
     @State private var capturedPhoto: CapturedARPhoto?
 
     var body: some View {
+        ZStack {
+            if isARActive {
+                arExperience
+            } else {
+                landingView
+            }
+        }
+        .onAppear(perform: selectInitialCharacterIfNeeded)
+        .onChange(of: characters.map(\.id)) { _, _ in
+            selectInitialCharacterIfNeeded()
+        }
+        .sheet(isPresented: $isAddingCharacter) {
+            AddCharacterView()
+        }
+        .fullScreenCover(item: $capturedPhoto) { photo in
+            CapturedPhotoPreviewView(image: photo.image, onSave: saveCapturedPhoto) { result in
+                handlePreviewSave(result)
+            }
+        }
+        .toolbar(isARActive ? .hidden : .visible, for: .tabBar)
+    }
+
+    // MARK: - AR起動中
+
+    private var arExperience: some View {
         ZStack {
             ARCharacterView(
                 selectedAsset: selectedAsset,
@@ -50,70 +76,197 @@ struct ARCameraScreen: View {
             .ignoresSafeArea()
 
             VStack(spacing: 0) {
-                header
+                arHeader
                 Spacer()
-                bottomControls
-            }
-        }
-        .onAppear(perform: selectInitialCharacterIfNeeded)
-        .onChange(of: characters.map(\.id)) { _, _ in
-            selectInitialCharacterIfNeeded()
-        }
-        .sheet(isPresented: $isAddingCharacter) {
-            AddCharacterView()
-        }
-        .fullScreenCover(item: $capturedPhoto) { photo in
-            CapturedPhotoPreviewView(image: photo.image, onSave: saveCapturedPhoto) { result in
-                handlePreviewSave(result)
+                if characters.isEmpty {
+                    welcomeCard
+                    Spacer()
+                } else {
+                    bottomControls
+                }
             }
         }
     }
 
-    private var header: some View {
+    private var arHeader: some View {
         HStack {
+            Button {
+                withAnimation(.easeInOut(duration: 0.25)) {
+                    isARActive = false
+                }
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.headline)
+                    .frame(width: 42, height: 42)
+            }
+            .buttonStyle(.bordered)
+            .clipShape(Circle())
+            .accessibilityLabel("ARを閉じる")
+
+            Spacer()
+
+            if !characters.isEmpty {
+                Button {
+                    removeLastTrigger += 1
+                } label: {
+                    Image(systemName: "arrow.uturn.backward")
+                        .font(.headline)
+                        .frame(width: 42, height: 42)
+                }
+                .buttonStyle(.bordered)
+                .clipShape(Circle())
+                .accessibilityLabel("最後の配置を削除")
+
+                Button {
+                    resetTrigger += 1
+                } label: {
+                    Image(systemName: "trash")
+                        .font(.headline)
+                        .frame(width: 42, height: 42)
+                }
+                .buttonStyle(.bordered)
+                .clipShape(Circle())
+                .accessibilityLabel("配置をリセット")
+
+                Button {
+                    isAddingCharacter = true
+                } label: {
+                    Image(systemName: "plus")
+                        .font(.headline)
+                        .frame(width: 42, height: 42)
+                }
+                .buttonStyle(.borderedProminent)
+                .clipShape(Circle())
+                .accessibilityLabel("キャラ追加")
+            }
+        }
+        .padding(.horizontal, 18)
+        .padding(.top, 12)
+    }
+
+    // MARK: - ランディング（カメラ起動前）
+
+    private var landingView: some View {
+        ZStack {
+            LinearGradient(
+                colors: [BrandColor.purpleLight.opacity(0.35), Color(.systemBackground)],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .ignoresSafeArea()
+
+            VStack(spacing: 0) {
+                landingHeader
+
+                if characters.isEmpty {
+                    Spacer()
+                    WelcomeEmptyState(
+                        icon: "teddybear.fill",
+                        title: "ぬいぐるみを連れていこう",
+                        message: "お気に入りのぬいぐるみを登録して、ARで一緒に写真を撮ろう！",
+                        actionTitle: "ぬいぐるみを登録",
+                        action: { isAddingCharacter = true }
+                    )
+                    Spacer()
+                } else {
+                    launchContent
+                }
+            }
+        }
+    }
+
+    private var landingHeader: some View {
+        HStack {
+            brandPill
+
+            Spacer()
+
+            if !characters.isEmpty {
+                Button {
+                    isAddingCharacter = true
+                } label: {
+                    Image(systemName: "plus")
+                        .font(.headline)
+                        .frame(width: 42, height: 42)
+                }
+                .buttonStyle(.borderedProminent)
+                .clipShape(Circle())
+                .accessibilityLabel("キャラ追加")
+            }
+        }
+        .padding(.horizontal, 18)
+        .padding(.top, 12)
+    }
+
+    private var brandPill: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "cube.fill")
             Text("つれてく")
-                .font(.headline)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 9)
-                .background(.ultraThinMaterial, in: Capsule())
+        }
+        .font(.system(.headline, design: .rounded).weight(.bold))
+        .foregroundStyle(.white)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 9)
+        .background(LinearGradient.brand, in: Capsule())
+        .shadow(color: BrandColor.purple.opacity(0.35), radius: 8, y: 4)
+    }
+
+    private var launchContent: some View {
+        VStack(spacing: 0) {
+            Spacer()
+
+            VStack(spacing: 22) {
+                ZStack {
+                    Circle()
+                        .fill(LinearGradient.brand)
+                        .frame(width: 128, height: 128)
+                        .shadow(color: BrandColor.purple.opacity(0.35), radius: 18, y: 8)
+
+                    Image(systemName: "camera.viewfinder")
+                        .font(.system(size: 52, weight: .bold))
+                        .foregroundStyle(.white)
+                }
+
+                VStack(spacing: 10) {
+                    Text("つれてく準備OK！")
+                        .font(.system(.title2, design: .rounded).weight(.bold))
+
+                    Text("カメラを起動して、ぬいぐるみと一緒にARで撮影しよう。")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                        .lineSpacing(2)
+                }
+                .padding(.horizontal, 28)
+
+                registeredPreview
+            }
 
             Spacer()
 
             Button {
-                removeLastTrigger += 1
+                withAnimation(.easeInOut(duration: 0.25)) {
+                    isARActive = true
+                }
             } label: {
-                Image(systemName: "arrow.uturn.backward")
-                    .font(.headline)
-                    .frame(width: 42, height: 42)
+                Label("ARでつれてく", systemImage: "camera.viewfinder")
+                    .font(.system(.headline, design: .rounded).weight(.bold))
             }
-            .buttonStyle(.bordered)
-            .clipShape(Circle())
-            .accessibilityLabel("最後の配置を削除")
-
-            Button {
-                resetTrigger += 1
-            } label: {
-                Image(systemName: "trash")
-                    .font(.headline)
-                    .frame(width: 42, height: 42)
-            }
-            .buttonStyle(.bordered)
-            .clipShape(Circle())
-            .accessibilityLabel("配置をリセット")
-
-            Button {
-                isAddingCharacter = true
-            } label: {
-                Image(systemName: "plus")
-                    .font(.headline)
-                    .frame(width: 42, height: 42)
-            }
-            .buttonStyle(.borderedProminent)
-            .clipShape(Circle())
-            .accessibilityLabel("キャラ追加")
+            .buttonStyle(BrandButtonStyle())
+            .padding(.bottom, 34)
         }
-        .padding(.horizontal, 18)
-        .padding(.top, 12)
+    }
+
+    private var registeredPreview: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 12) {
+                ForEach(characters) { character in
+                    CharacterThumbnailView(character: character)
+                }
+            }
+            .padding(.horizontal, 24)
+            .padding(.vertical, 4)
+        }
     }
 
     @ViewBuilder
@@ -129,34 +282,56 @@ struct ARCameraScreen: View {
                     .transition(.opacity)
             }
 
-            if characters.isEmpty {
-                Button {
-                    isAddingCharacter = true
-                } label: {
-                    Label("キャラ追加", systemImage: "plus")
-                        .font(.headline)
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.borderedProminent)
-                .padding(.horizontal, 20)
-            } else {
-                selectedCharacterSummary
-                characterPicker
-                sizeControl
-                placementTools
+            placementTools
+            controlPanel
+            captureButton
+        }
+        .padding(.bottom, 10)
+    }
 
-                Button {
-                    captureTrigger += 1
-                } label: {
-                    Image(systemName: "camera.circle.fill")
-                        .font(.system(size: 68))
-                        .symbolRenderingMode(.hierarchical)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("撮影")
+    /// キャラ情報・選択・サイズを1枚にまとめたパネル。
+    private var controlPanel: some View {
+        VStack(spacing: 10) {
+            selectedCharacterSummary
+            characterPicker
+            sizeControl
+        }
+        .padding(.vertical, 12)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 26))
+        .padding(.horizontal, 14)
+    }
+
+    /// シャッター風の撮影ボタン。
+    private var captureButton: some View {
+        Button {
+            captureTrigger += 1
+        } label: {
+            ZStack {
+                Circle()
+                    .stroke(.white.opacity(0.85), lineWidth: 4)
+                    .frame(width: 78, height: 78)
+
+                Circle()
+                    .fill(.white)
+                    .frame(width: 64, height: 64)
+                    .shadow(color: .black.opacity(0.25), radius: 6, y: 2)
             }
         }
-        .padding(.bottom, 26)
+        .buttonStyle(.plain)
+        .accessibilityLabel("撮影")
+        .padding(.top, 2)
+    }
+
+    private var welcomeCard: some View {
+        WelcomeEmptyState(
+            icon: "teddybear.fill",
+            title: "ぬいぐるみを連れていこう",
+            message: "お気に入りのぬいぐるみを登録して、ARで一緒に写真を撮ろう！",
+            actionTitle: "ぬいぐるみを登録",
+            action: { isAddingCharacter = true }
+        )
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 28))
+        .padding(.horizontal, 24)
     }
 
     private var characterPicker: some View {
@@ -174,10 +349,8 @@ struct ARCameraScreen: View {
                     .buttonStyle(.plain)
                 }
             }
-            .padding(.horizontal, 18)
-            .padding(.vertical, 10)
+            .padding(.horizontal, 16)
         }
-        .background(.ultraThinMaterial)
     }
 
     @ViewBuilder
@@ -208,8 +381,6 @@ struct ARCameraScreen: View {
                 }
             }
             .padding(.horizontal, 18)
-            .padding(.vertical, 10)
-            .background(.ultraThinMaterial)
         }
     }
 
@@ -238,8 +409,6 @@ struct ARCameraScreen: View {
                     .frame(width: 48, alignment: .trailing)
             }
             .padding(.horizontal, 18)
-            .padding(.vertical, 10)
-            .background(.ultraThinMaterial)
         }
     }
 
@@ -271,9 +440,10 @@ struct ARCameraScreen: View {
                     removeSelectedTrigger += 1
                 }
             }
-            .padding(.horizontal, 18)
+            .padding(.horizontal, 14)
             .padding(.vertical, 10)
-            .background(.ultraThinMaterial)
+            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 26))
+            .padding(.horizontal, 14)
         }
     }
 

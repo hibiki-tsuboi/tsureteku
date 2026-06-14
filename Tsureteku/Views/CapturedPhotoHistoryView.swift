@@ -43,11 +43,11 @@ struct CapturedPhotoHistoryView: View {
     }
 
     private var emptyState: some View {
-        ContentUnavailableView {
-            Label("写真なし", systemImage: "photo.stack")
-        } description: {
-            Text("AR画面で撮影して保存すると、ここに写真が並びます。")
-        }
+        WelcomeEmptyState(
+            icon: "photo.stack.fill",
+            title: "思い出はまだこれから",
+            message: "ARでぬいぐるみと一緒に撮影すると、ここに写真が並んでいくよ。"
+        )
     }
 }
 
