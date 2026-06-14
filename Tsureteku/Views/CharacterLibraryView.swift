@@ -71,7 +71,7 @@ struct CharacterLibraryView: View {
                 Text(character.name)
                     .font(.headline)
 
-                Text(character.createdAt, format: .dateTime.year().month().day())
+                Text(Self.relativeDateText(character.createdAt))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -79,6 +79,32 @@ struct CharacterLibraryView: View {
             Spacer()
         }
         .padding(.vertical, 6)
+    }
+
+    /// 今日／昨日／6/13（今年）／2025/1/1（別の年）の形式で日付を表示する。
+    private static func relativeDateText(_ date: Date) -> String {
+        let calendar = Calendar.current
+
+        if calendar.isDateInToday(date) {
+            return "今日"
+        }
+
+        if calendar.isDateInYesterday(date) {
+            return "昨日"
+        }
+
+        let components = calendar.dateComponents([.year, .month, .day], from: date)
+        guard let year = components.year,
+              let month = components.month,
+              let day = components.day else {
+            return ""
+        }
+
+        if calendar.isDate(date, equalTo: Date(), toGranularity: .year) {
+            return "\(month)/\(day)"
+        }
+
+        return "\(year)/\(month)/\(day)"
     }
 
     private func deleteCharacters(offsets: IndexSet) {
