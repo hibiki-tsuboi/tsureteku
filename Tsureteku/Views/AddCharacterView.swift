@@ -13,6 +13,7 @@ import UIKit
 struct AddCharacterView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
+    @Query private var existingCharacters: [ToyCharacter]
 
     @State private var characterName = ""
     @State private var sourceImage: UIImage?
@@ -220,7 +221,7 @@ struct AddCharacterView: View {
                 errorMessage = result.warningMessage
 
                 if characterName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                    characterName = "推し"
+                    characterName = defaultCharacterName()
                 }
 
                 isProcessing = false
@@ -267,6 +268,23 @@ struct AddCharacterView: View {
                 activeProcessingID = nil
             }
         }
+    }
+
+    /// 「推し」「推し 2」「推し 3」…と重複しない初期名を返す。
+    private func defaultCharacterName() -> String {
+        let baseName = "推し"
+        let existingNames = Set(existingCharacters.map(\.name))
+
+        if !existingNames.contains(baseName) {
+            return baseName
+        }
+
+        var index = 2
+        while existingNames.contains("\(baseName) \(index)") {
+            index += 1
+        }
+
+        return "\(baseName) \(index)"
     }
 
     private func saveCharacter() {
