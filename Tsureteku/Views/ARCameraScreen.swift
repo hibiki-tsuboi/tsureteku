@@ -32,6 +32,7 @@ struct ARCameraScreen: View {
     @State private var isCameraAccessDenied = false
     @State private var isARUnsupported = false
     @State private var isResetConfirmationPresented = false
+    @State private var isSelfieMode = false
     @State private var captureFlashOpacity = 0.0
     @State private var statusMessage: String?
     @State private var selectedPlacementName: String?
@@ -94,6 +95,7 @@ struct ARCameraScreen: View {
         ZStack {
             ARCharacterView(
                 selectedAsset: selectedAsset,
+                isSelfieMode: isSelfieMode,
                 captureTrigger: $captureTrigger,
                 removeLastTrigger: $removeLastTrigger,
                 resetTrigger: $resetTrigger,
@@ -131,6 +133,7 @@ struct ARCameraScreen: View {
     private var arHeader: some View {
         HStack {
             Button {
+                isSelfieMode = false
                 withAnimation(.easeInOut(duration: 0.25)) {
                     isARActive = false
                 }
@@ -146,27 +149,43 @@ struct ARCameraScreen: View {
             Spacer()
 
             if !characters.isEmpty {
-                Button {
-                    removeLastTrigger += 1
-                } label: {
-                    Image(systemName: "arrow.uturn.backward")
-                        .font(.headline)
-                        .frame(width: 42, height: 42)
+                if ARFaceTrackingConfiguration.isSupported {
+                    Button {
+                        toggleSelfieMode()
+                    } label: {
+                        Image(systemName: isSelfieMode ? "camera.rotate.fill" : "camera.rotate")
+                            .font(.headline)
+                            .frame(width: 42, height: 42)
+                    }
+                    .buttonStyle(.bordered)
+                    .tint(isSelfieMode ? BrandColor.purple : Color.accentColor)
+                    .clipShape(Circle())
+                    .accessibilityLabel(isSelfieMode ? "背面カメラに切り替え" : "自撮りに切り替え")
                 }
-                .buttonStyle(.bordered)
-                .clipShape(Circle())
-                .accessibilityLabel("最後の配置を削除")
 
-                Button {
-                    isResetConfirmationPresented = true
-                } label: {
-                    Image(systemName: "trash")
-                        .font(.headline)
-                        .frame(width: 42, height: 42)
+                if !isSelfieMode {
+                    Button {
+                        removeLastTrigger += 1
+                    } label: {
+                        Image(systemName: "arrow.uturn.backward")
+                            .font(.headline)
+                            .frame(width: 42, height: 42)
+                    }
+                    .buttonStyle(.bordered)
+                    .clipShape(Circle())
+                    .accessibilityLabel("最後の配置を削除")
+
+                    Button {
+                        isResetConfirmationPresented = true
+                    } label: {
+                        Image(systemName: "trash")
+                            .font(.headline)
+                            .frame(width: 42, height: 42)
+                    }
+                    .buttonStyle(.bordered)
+                    .clipShape(Circle())
+                    .accessibilityLabel("配置をリセット")
                 }
-                .buttonStyle(.bordered)
-                .clipShape(Circle())
-                .accessibilityLabel("配置をリセット")
 
                 Button {
                     isAddingCharacter = true
@@ -438,12 +457,14 @@ struct ARCameraScreen: View {
                     rotateRightTrigger += 1
                 }
 
-                placementToolButton(systemImage: "camera.viewfinder", accessibilityLabel: "選択中の推しをカメラに向ける") {
-                    faceCameraTrigger += 1
-                }
+                if !isSelfieMode {
+                    placementToolButton(systemImage: "camera.viewfinder", accessibilityLabel: "選択中の推しをカメラに向ける") {
+                        faceCameraTrigger += 1
+                    }
 
-                placementToolButton(systemImage: "trash", accessibilityLabel: "選択中の推しを削除", role: .destructive) {
-                    removeSelectedTrigger += 1
+                    placementToolButton(systemImage: "trash", accessibilityLabel: "選択中の推しを削除", role: .destructive) {
+                        removeSelectedTrigger += 1
+                    }
                 }
             }
             .padding(.horizontal, 14)
@@ -539,6 +560,13 @@ struct ARCameraScreen: View {
     private func activateAR() {
         withAnimation(.easeInOut(duration: 0.25)) {
             isARActive = true
+        }
+    }
+
+    private func toggleSelfieMode() {
+        selectedPlacementName = nil
+        withAnimation(.easeInOut(duration: 0.2)) {
+            isSelfieMode.toggle()
         }
     }
 

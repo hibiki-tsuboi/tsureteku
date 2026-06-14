@@ -23,6 +23,7 @@ struct CharacterARAsset: Equatable {
 
 struct ARCharacterView: UIViewRepresentable {
     var selectedAsset: CharacterARAsset?
+    var isSelfieMode: Bool
     @Binding var captureTrigger: Int
     @Binding var removeLastTrigger: Int
     @Binding var resetTrigger: Int
@@ -48,6 +49,7 @@ struct ARCharacterView: UIViewRepresentable {
 
     func makeUIView(context: Context) -> ARView {
         let arView = ARView(frame: .zero, cameraMode: .ar, automaticallyConfigureSession: false)
+        context.coordinator.isSelfieMode = isSelfieMode
         context.coordinator.configure(arView)
         return arView
     }
@@ -57,6 +59,7 @@ struct ARCharacterView: UIViewRepresentable {
         context.coordinator.onCapture = onCapture
         context.coordinator.onStatus = onStatus
         context.coordinator.selectedPlacementName = $selectedPlacementName
+        context.coordinator.updateSelfieMode(isSelfieMode, in: arView)
 
         if captureTrigger != context.coordinator.lastCaptureTrigger {
             context.coordinator.lastCaptureTrigger = captureTrigger
@@ -158,8 +161,13 @@ struct ARCharacterView: UIViewRepresentable {
         var onCapture: (Result<UIImage, Error>) -> Void
         var onStatus: (String) -> Void
         var selectedPlacementName: Binding<String?>
+        var isSelfieMode = false
         private var placements: [PlacedCharacter] = []
         private var selectedPlacementID: UUID?
+        private weak var coachingOverlay: ARCoachingOverlayView?
+        private var selfieAssetID: UUID?
+        private var selfieSize: Float?
+        private var selfieScaleDivisor: Float = 1
 
         init(
             selectedAsset: CharacterARAsset?,
@@ -179,16 +187,6 @@ struct ARCharacterView: UIViewRepresentable {
             let tapGesture = UITapGestureRecognizer(target: self, action: #selector(handleTap(_:)))
             arView.addGestureRecognizer(tapGesture)
 
-            guard ARWorldTrackingConfiguration.isSupported else {
-                onStatus("この端末ではARを利用できません。")
-                return
-            }
-
-            let configuration = ARWorldTrackingConfiguration()
-            configuration.planeDetection = [.horizontal]
-            configuration.environmentTexturing = .automatic
-            arView.session.run(configuration)
-
             let coachingOverlay = ARCoachingOverlayView()
             coachingOverlay.session = arView.session
             coachingOverlay.goal = .horizontalPlane
@@ -202,9 +200,186 @@ struct ARCharacterView: UIViewRepresentable {
                 coachingOverlay.topAnchor.constraint(equalTo: arView.topAnchor),
                 coachingOverlay.bottomAnchor.constraint(equalTo: arView.bottomAnchor)
             ])
+            self.coachingOverlay = coachingOverlay
+
+            if isSelfieMode {
+                startSelfieSession(in: arView)
+            } else {
+                startWorldSession(in: arView)
+            }
+        }
+
+        // MARK: - カメラモード
+
+        func updateSelfieMode(_ selfie: Bool, in arView: ARView) {
+            if selfie != isSelfieMode {
+                isSelfieMode = selfie
+                removeAllPlacements(in: arView)
+                selfieAssetID = nil
+                selfieSize = nil
+
+                if selfie {
+                    startSelfieSession(in: arView)
+                } else {
+                    startWorldSession(in: arView)
+                }
+            } else if selfie {
+                refreshSelfieCharacter(in: arView)
+            }
+        }
+
+        private func startWorldSession(in arView: ARView) {
+            guard ARWorldTrackingConfiguration.isSupported else {
+                onStatus("この端末ではARを利用できません。")
+                return
+            }
+
+            let configuration = ARWorldTrackingConfiguration()
+            configuration.planeDetection = [.horizontal]
+            configuration.environmentTexturing = .automatic
+
+            // 対応端末では人物オクルージョンを有効にし、人の前後に推しが自然に回り込むようにする。
+            if ARWorldTrackingConfiguration.supportsFrameSemantics(.personSegmentationWithDepth) {
+                configuration.frameSemantics.insert(.personSegmentationWithDepth)
+            }
+
+            arView.session.run(configuration, options: [.removeExistingAnchors, .resetTracking])
+
+            coachingOverlay?.goal = .horizontalPlane
+            coachingOverlay?.activatesAutomatically = true
+        }
+
+        private func startSelfieSession(in arView: ARView) {
+            guard ARFaceTrackingConfiguration.isSupported else {
+                onStatus("この端末では自撮りARを利用できません。")
+                return
+            }
+
+            coachingOverlay?.activatesAutomatically = false
+            coachingOverlay?.setActive(false, animated: false)
+
+            let configuration = ARFaceTrackingConfiguration()
+            configuration.maximumNumberOfTrackedFaces = 1
+            configuration.isLightEstimationEnabled = true
+            arView.session.run(configuration, options: [.removeExistingAnchors, .resetTracking])
+
+            onStatus("顔が映ると、選んだ推しが隣に現れます。")
+            refreshSelfieCharacter(in: arView)
+        }
+
+        private func refreshSelfieCharacter(in arView: ARView) {
+            guard isSelfieMode else {
+                return
+            }
+
+            guard let asset = selectedAsset else {
+                removeAllPlacements(in: arView)
+                selfieAssetID = nil
+                selfieSize = nil
+                return
+            }
+
+            // 同じ推しならサイズ変更だけ反映して作り直さない。
+            if asset.id == selfieAssetID {
+                if selfieSize != asset.defaultSizeMeters, let placement = placements.first {
+                    let scale = asset.defaultSizeMeters / selfieScaleDivisor
+                    placement.entity.scale = SIMD3<Float>(repeating: scale)
+                    selfieSize = asset.defaultSizeMeters
+                }
+                return
+            }
+
+            removeAllPlacements(in: arView)
+
+            do {
+                let placement = try placeSelfieCharacter(asset, in: arView)
+                placements.append(placement)
+                selectPlacement(placement)
+                selfieAssetID = asset.id
+                selfieSize = asset.defaultSizeMeters
+            } catch {
+                onStatus(error.localizedDescription)
+            }
+        }
+
+        private func placeSelfieCharacter(_ asset: CharacterARAsset, in arView: ARView) throws -> PlacedCharacter {
+            let entity: ModelEntity
+            let divisor: Float
+
+            if let modelFileName = asset.modelFileName {
+                let modelURL = try CharacterImageStore.modelURL(for: modelFileName)
+                let loaded = try ModelEntity.loadModel(contentsOf: modelURL, withName: asset.id.uuidString)
+                let bounds = loaded.visualBounds(recursive: true, relativeTo: loaded)
+                let maxExtent = max(bounds.extents.x, bounds.extents.y, bounds.extents.z)
+                divisor = maxExtent > 0 ? maxExtent : 1
+
+                // モデルの中心を原点に合わせ、拡大・回転がぶれないようにする。
+                let center = (bounds.min + bounds.max) / 2
+                loaded.position = -center
+
+                let container = ModelEntity()
+                container.addChild(loaded)
+                // モデルの正面（-Z）をカメラ（顔アンカーの+Z）へ向ける。
+                container.orientation = simd_quatf(angle: (asset.modelYawDegrees + 180) * .pi / 180, axis: [0, 1, 0])
+                entity = container
+            } else {
+                let imageURL = try CharacterImageStore.url(for: asset.cutoutImageFileName, kind: .cutout)
+                let texture = try TextureResource.load(
+                    contentsOf: imageURL,
+                    withName: asset.id.uuidString,
+                    options: .init(semantic: .color, mipmapsMode: .allocateAndGenerateAll)
+                )
+
+                let aspectRatio = max(0.25, min(4.0, Float(texture.width) / Float(max(texture.height, 1))))
+                let mesh = MeshResource.generatePlane(width: aspectRatio, height: 1.0)
+
+                var material = UnlitMaterial(texture: texture)
+                material.blending = .transparent(opacity: 1.0)
+                material.opacityThreshold = 0.01
+                material.faceCulling = .none
+
+                entity = ModelEntity(mesh: mesh, materials: [material])
+                divisor = 1.0
+            }
+
+            entity.name = asset.name
+            let scale = asset.defaultSizeMeters / divisor
+            entity.scale = SIMD3<Float>(repeating: scale)
+            // 顔の横、少し手前に配置する。
+            entity.position = [0.16, 0, 0.06]
+            entity.generateCollisionShapes(recursive: true)
+
+            let anchor = AnchorEntity(.face)
+            anchor.addChild(entity)
+            arView.scene.addAnchor(anchor)
+            arView.installGestures([.translation, .rotation, .scale], for: entity)
+
+            selfieScaleDivisor = divisor
+
+            return PlacedCharacter(
+                anchor: anchor,
+                entity: entity,
+                name: asset.name,
+                baseScale: entity.scale,
+                yawCorrectionDegrees: asset.modelYawDegrees,
+                selectionMarker: Entity()
+            )
+        }
+
+        private func removeAllPlacements(in arView: ARView) {
+            for placement in placements {
+                arView.scene.removeAnchor(placement.anchor)
+            }
+
+            placements.removeAll()
+            clearSelectedPlacement()
         }
 
         @objc private func handleTap(_ recognizer: UITapGestureRecognizer) {
+            guard !isSelfieMode else {
+                return
+            }
+
             guard let arView = recognizer.view as? ARView else {
                 return
             }
