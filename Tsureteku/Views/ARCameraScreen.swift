@@ -8,6 +8,7 @@
 import ARKit
 import AudioToolbox
 import AVFoundation
+import ReplayKit
 import SwiftData
 import SwiftUI
 import UIKit
@@ -33,6 +34,8 @@ struct ARCameraScreen: View {
     @State private var isARUnsupported = false
     @State private var isResetConfirmationPresented = false
     @State private var isSelfieMode = false
+    @State private var isRecording = false
+    @State private var recordingPreview: RecordingPreviewItem?
     @State private var captureFlashOpacity = 0.0
     @State private var statusMessage: String?
     @State private var selectedPlacementName: String?
@@ -59,6 +62,11 @@ struct ARCameraScreen: View {
         .fullScreenCover(item: $capturedPhoto) { photo in
             CapturedPhotoPreviewView(image: photo.image, onSave: saveCapturedPhoto) { result in
                 handlePreviewSave(result)
+            }
+        }
+        .fullScreenCover(item: $recordingPreview) { item in
+            RecordingPreview(previewController: item.controller) {
+                recordingPreview = nil
             }
         }
         .alert("カメラを使えません", isPresented: $isCameraAccessDenied) {
@@ -118,7 +126,9 @@ struct ARCameraScreen: View {
                 .allowsHitTesting(false)
 
             VStack(spacing: 0) {
-                arHeader
+                if !isRecording {
+                    arHeader
+                }
                 Spacer()
                 if characters.isEmpty {
                     welcomeCard
@@ -293,23 +303,92 @@ struct ARCameraScreen: View {
     @ViewBuilder
     private var bottomControls: some View {
         VStack(spacing: 12) {
-            if let statusMessage {
-                Text(statusMessage)
-                    .font(.callout)
-                    .foregroundStyle(.primary)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 8)
-                    .background(.ultraThinMaterial, in: Capsule())
-                    .transition(.opacity)
-            }
+            if isRecording {
+                recordingControls
+            } else {
+                if let statusMessage {
+                    Text(statusMessage)
+                        .font(.callout)
+                        .foregroundStyle(.primary)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 8)
+                        .background(.ultraThinMaterial, in: Capsule())
+                        .transition(.opacity)
+                }
 
-            placementTools
-            controlPanel
-            captureButton
+                placementTools
+                controlPanel
+                captureControls
+            }
         }
         .frame(maxWidth: Self.contentMaxWidth)
         .frame(maxWidth: .infinity)
         .padding(.bottom, 10)
+    }
+
+    /// シャッター（写真）と録画（動画）を横並びにしたボタン群。
+    private var captureControls: some View {
+        ZStack {
+            captureButton
+
+            HStack {
+                Spacer()
+                recordButton
+                    .padding(.trailing, 36)
+            }
+        }
+    }
+
+    /// 録画開始ボタン（赤い丸＋ビデオアイコン）。
+    private var recordButton: some View {
+        Button {
+            startRecording()
+        } label: {
+            ZStack {
+                Circle()
+                    .fill(.ultraThinMaterial)
+                    .frame(width: 54, height: 54)
+
+                Image(systemName: "video.fill")
+                    .font(.title3)
+                    .foregroundStyle(.red)
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("動画を撮影")
+    }
+
+    /// 録画中に表示する、停止ボタンと録画インジケータ。
+    private var recordingControls: some View {
+        VStack(spacing: 14) {
+            HStack(spacing: 8) {
+                Circle()
+                    .fill(.red)
+                    .frame(width: 10, height: 10)
+
+                Text("録画中")
+                    .font(.callout.weight(.semibold))
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 8)
+            .background(.ultraThinMaterial, in: Capsule())
+
+            Button {
+                stopRecording()
+            } label: {
+                ZStack {
+                    Circle()
+                        .stroke(.white.opacity(0.85), lineWidth: 4)
+                        .frame(width: 78, height: 78)
+
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(.red)
+                        .frame(width: 30, height: 30)
+                }
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("録画を停止")
+        }
     }
 
     /// 推し情報・選択・サイズを1枚にまとめたパネル。
@@ -570,6 +649,51 @@ struct ARCameraScreen: View {
         }
     }
 
+    private func startRecording() {
+        let recorder = RPScreenRecorder.shared()
+
+        guard recorder.isAvailable else {
+            showStatus("この端末では画面収録を利用できません。")
+            return
+        }
+
+        recorder.isMicrophoneEnabled = true
+        recorder.startRecording { error in
+            DispatchQueue.main.async {
+                if let error {
+                    showStatus(error.localizedDescription)
+                    return
+                }
+
+                UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    isRecording = true
+                }
+            }
+        }
+    }
+
+    private func stopRecording() {
+        RPScreenRecorder.shared().stopRecording { previewController, error in
+            DispatchQueue.main.async {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    isRecording = false
+                }
+
+                if let error {
+                    showStatus(error.localizedDescription)
+                    return
+                }
+
+                if let previewController {
+                    recordingPreview = RecordingPreviewItem(controller: previewController)
+                } else {
+                    showStatus("動画を保存できませんでした。")
+                }
+            }
+        }
+    }
+
     /// 撮影時に触覚・シャッター音・一瞬の白フラッシュで「撮れた」手応えを返す。
     private func triggerCaptureFeedback() {
         UIImpactFeedbackGenerator(style: .medium).impactOccurred()
@@ -646,6 +770,40 @@ struct ARCameraScreen: View {
 private struct CapturedARPhoto: Identifiable {
     let id = UUID()
     let image: UIImage
+}
+
+private struct RecordingPreviewItem: Identifiable {
+    let id = UUID()
+    let controller: RPPreviewViewController
+}
+
+/// ReplayKitの録画プレビュー（保存・共有）を表示するラッパー。
+private struct RecordingPreview: UIViewControllerRepresentable {
+    let previewController: RPPreviewViewController
+    let onFinish: () -> Void
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(onFinish: onFinish)
+    }
+
+    func makeUIViewController(context: Context) -> RPPreviewViewController {
+        previewController.previewControllerDelegate = context.coordinator
+        return previewController
+    }
+
+    func updateUIViewController(_ uiViewController: RPPreviewViewController, context: Context) {}
+
+    final class Coordinator: NSObject, RPPreviewViewControllerDelegate {
+        private let onFinish: () -> Void
+
+        init(onFinish: @escaping () -> Void) {
+            self.onFinish = onFinish
+        }
+
+        func previewControllerDidFinish(_ previewController: RPPreviewViewController) {
+            onFinish()
+        }
+    }
 }
 
 #Preview {
