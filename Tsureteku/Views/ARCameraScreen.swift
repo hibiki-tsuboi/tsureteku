@@ -5,6 +5,7 @@
 //  Created by Hibiki Tsuboi on 2026/06/10.
 //
 
+import AVFoundation
 import SwiftData
 import SwiftUI
 import UIKit
@@ -26,6 +27,7 @@ struct ARCameraScreen: View {
     @State private var clearPlacementSelectionTrigger = 0
     @State private var isAddingCharacter = false
     @State private var isARActive = false
+    @State private var isCameraAccessDenied = false
     @State private var statusMessage: String?
     @State private var selectedPlacementName: String?
     @State private var capturedPhoto: CapturedARPhoto?
@@ -49,6 +51,14 @@ struct ARCameraScreen: View {
             CapturedPhotoPreviewView(image: photo.image, onSave: saveCapturedPhoto) { result in
                 handlePreviewSave(result)
             }
+        }
+        .alert("カメラを使えません", isPresented: $isCameraAccessDenied) {
+            Button("設定を開く") {
+                openAppSettings()
+            }
+            Button("閉じる", role: .cancel) {}
+        } message: {
+            Text("ARでぬいぐるみと撮影するにはカメラの利用を許可してください。設定アプリの「つれてく」から変更できます。")
         }
         .toolbar(isARActive ? .hidden : .visible, for: .tabBar)
     }
@@ -207,9 +217,7 @@ struct ARCameraScreen: View {
             Spacer()
 
             Button {
-                withAnimation(.easeInOut(duration: 0.25)) {
-                    isARActive = true
-                }
+                startARSession()
             } label: {
                 Label("ARでつれてく", systemImage: "camera.viewfinder")
                     .font(.system(.headline, design: .rounded).weight(.bold))
@@ -464,6 +472,41 @@ struct ARCameraScreen: View {
         clearPlacementSelectionTrigger += 1
         character.lastUsedAt = Date()
         try? modelContext.save()
+    }
+
+    private func startARSession() {
+        switch AVCaptureDevice.authorizationStatus(for: .video) {
+        case .authorized:
+            activateAR()
+        case .notDetermined:
+            AVCaptureDevice.requestAccess(for: .video) { isGranted in
+                DispatchQueue.main.async {
+                    if isGranted {
+                        activateAR()
+                    } else {
+                        isCameraAccessDenied = true
+                    }
+                }
+            }
+        case .denied, .restricted:
+            isCameraAccessDenied = true
+        @unknown default:
+            isCameraAccessDenied = true
+        }
+    }
+
+    private func activateAR() {
+        withAnimation(.easeInOut(duration: 0.25)) {
+            isARActive = true
+        }
+    }
+
+    private func openAppSettings() {
+        guard let url = URL(string: UIApplication.openSettingsURLString) else {
+            return
+        }
+
+        UIApplication.shared.open(url)
     }
 
     private func handleCapture(_ result: Result<UIImage, Error>) {

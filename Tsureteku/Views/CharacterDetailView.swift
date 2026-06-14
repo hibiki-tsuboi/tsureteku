@@ -5,6 +5,7 @@
 //  Created by Hibiki Tsuboi on 2026/06/10.
 //
 
+import RealityKit
 import SwiftData
 import SwiftUI
 import UniformTypeIdentifiers
@@ -81,10 +82,19 @@ struct CharacterDetailView: View {
             }
 
             Section("Object Capture") {
-                NavigationLink {
-                    ObjectCapturePreparationView(character: character)
-                } label: {
+                if ObjectCaptureSession.isSupported {
+                    NavigationLink {
+                        ObjectCapturePreparationView(character: character)
+                    } label: {
+                        Label("3D撮影セットを作る", systemImage: "camera.aperture")
+                    }
+                } else {
                     Label("3D撮影セットを作る", systemImage: "camera.aperture")
+                        .foregroundStyle(.secondary)
+
+                    Label("この端末では使えません（USDZ登録は可能）", systemImage: "exclamationmark.circle")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
 
                 if character.objectCaptureDirectoryName != nil {
