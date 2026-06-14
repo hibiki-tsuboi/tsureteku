@@ -8,6 +8,7 @@
 import RealityKit
 import SwiftData
 import SwiftUI
+import UIKit
 import UniformTypeIdentifiers
 
 struct CharacterDetailView: View {
@@ -16,6 +17,7 @@ struct CharacterDetailView: View {
 
     @State private var isImportingModel = false
     @State private var isModelDeleteConfirmationPresented = false
+    @State private var shareableModel: ShareableModel?
     @State private var errorMessage: String?
 
     var body: some View {
@@ -74,6 +76,12 @@ struct CharacterDetailView: View {
                         Label("3Dモデルを確認・調整", systemImage: "cube")
                     }
 
+                    Button {
+                        shareModel()
+                    } label: {
+                        Label("3Dモデルを共有", systemImage: "square.and.arrow.up")
+                    }
+
                     Button(role: .destructive) {
                         isModelDeleteConfirmationPresented = true
                     } label: {
@@ -129,6 +137,33 @@ struct CharacterDetailView: View {
         } message: {
             Text("削除すると元に戻せません。もう一度3D撮影またはUSDZ登録が必要です。")
         }
+        .sheet(item: $shareableModel) { model in
+            ModelShareSheet(url: model.url)
+        }
+    }
+
+    private func shareModel() {
+        guard let modelFileName = character.modelFileName,
+              let sourceURL = try? CharacterImageStore.modelURL(for: modelFileName) else {
+            errorMessage = "共有できる3Dモデルがありません。"
+            return
+        }
+
+        let trimmedName = character.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let baseName = trimmedName.isEmpty ? "推し" : trimmedName
+        let invalidCharacters = CharacterSet(charactersIn: "/\\?%*|\"<>:")
+        let safeName = baseName.components(separatedBy: invalidCharacters).joined()
+        let exportURL = FileManager.default.temporaryDirectory.appendingPathComponent("\(safeName).usdz")
+
+        try? FileManager.default.removeItem(at: exportURL)
+
+        do {
+            try FileManager.default.copyItem(at: sourceURL, to: exportURL)
+            shareableModel = ShareableModel(url: exportURL)
+        } catch {
+            // 名前付きコピーに失敗した場合は元ファイルをそのまま共有する。
+            shareableModel = ShareableModel(url: sourceURL)
+        }
     }
 
     private func importModel(_ result: Result<URL, Error>) {
@@ -166,4 +201,19 @@ private extension UTType {
     static var usdzModel: UTType {
         UTType(filenameExtension: "usdz") ?? .data
     }
+}
+
+private struct ShareableModel: Identifiable {
+    let id = UUID()
+    let url: URL
+}
+
+private struct ModelShareSheet: UIViewControllerRepresentable {
+    let url: URL
+
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        UIActivityViewController(activityItems: [url], applicationActivities: nil)
+    }
+
+    func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
 }
