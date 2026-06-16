@@ -29,6 +29,13 @@ struct CharacterLibraryView: View {
                             }
                         }
                         .onDelete(perform: deleteCharacters)
+
+                        Section {
+                        } footer: {
+                            Text(Self.versionText)
+                                .frame(maxWidth: .infinity, alignment: .center)
+                                .padding(.top, 8)
+                        }
                     }
                     .listStyle(.plain)
                 }
@@ -79,6 +86,14 @@ struct CharacterLibraryView: View {
             Spacer()
         }
         .padding(.vertical, 6)
+    }
+
+    /// "v1.0.0 (2)" の形式でアプリのバージョンとビルド番号を表示する。
+    private static var versionText: String {
+        let info = Bundle.main.infoDictionary
+        let version = info?["CFBundleShortVersionString"] as? String ?? "-"
+        let build = info?["CFBundleVersion"] as? String ?? "-"
+        return "v\(version) (\(build))"
     }
 
     /// 今日／昨日／6/13（今年）／2025/1/1（別の年）の形式で日付を表示する。
