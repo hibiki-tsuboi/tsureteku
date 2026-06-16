@@ -732,8 +732,10 @@ struct ARCharacterView: UIViewRepresentable {
         }
 
         private func makeSelectionMarker(width: Float, depth: Float, baseY: Float) -> Entity {
-            var material = UnlitMaterial(color: UIColor.systemCyan.withAlphaComponent(0.72))
-            material.blending = .transparent(opacity: 0.72)
+            // ブランドのミント (#3FE0B8) で足元に丸いリングを描き、選択中を柔らかく示す。
+            let mint = UIColor(red: 0.247, green: 0.878, blue: 0.722, alpha: 1.0)
+            var material = UnlitMaterial(color: mint.withAlphaComponent(0.85))
+            material.blending = .transparent(opacity: 0.85)
             material.faceCulling = .none
 
             let marker = Entity()
@@ -741,37 +743,26 @@ struct ARCharacterView: UIViewRepresentable {
             marker.position = [0, baseY + 0.008, 0]
             marker.isEnabled = false
 
-            let lineThickness = max(min(width, depth) * 0.035, 0.006)
+            // フットプリントの大きい方の寸法をわずかに上回る半径で全体を囲う。
+            let radius = max(max(width, depth) * 0.55, 0.05)
+            let lineThickness = max(min(width, depth) * 0.05, 0.006)
             let lineHeight: Float = 0.004
+            let segmentCount = 48
+            // 隣り合うセグメントを少し重ねて、継ぎ目のない滑らかなリングにする。
+            let segmentLength = (2 * .pi * radius) / Float(segmentCount) * 1.2
 
-            let front = ModelEntity(
-                mesh: .generateBox(width: width, height: lineHeight, depth: lineThickness),
-                materials: [material]
-            )
-            front.position.z = depth / 2
+            for index in 0..<segmentCount {
+                let angle = (2 * .pi) * Float(index) / Float(segmentCount)
+                let segment = ModelEntity(
+                    mesh: .generateBox(width: segmentLength, height: lineHeight, depth: lineThickness),
+                    materials: [material]
+                )
+                segment.position = [radius * cos(angle), 0, radius * sin(angle)]
+                // ボックスの長辺を円の接線方向に向ける。
+                segment.orientation = simd_quatf(angle: -(angle + .pi / 2), axis: [0, 1, 0])
+                marker.addChild(segment)
+            }
 
-            let back = ModelEntity(
-                mesh: .generateBox(width: width, height: lineHeight, depth: lineThickness),
-                materials: [material]
-            )
-            back.position.z = -depth / 2
-
-            let left = ModelEntity(
-                mesh: .generateBox(width: lineThickness, height: lineHeight, depth: depth),
-                materials: [material]
-            )
-            left.position.x = -width / 2
-
-            let right = ModelEntity(
-                mesh: .generateBox(width: lineThickness, height: lineHeight, depth: depth),
-                materials: [material]
-            )
-            right.position.x = width / 2
-
-            marker.addChild(front)
-            marker.addChild(back)
-            marker.addChild(left)
-            marker.addChild(right)
             return marker
         }
 
