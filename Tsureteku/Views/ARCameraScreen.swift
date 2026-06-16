@@ -40,6 +40,7 @@ struct ARCameraScreen: View {
     @State private var statusMessage: String?
     @State private var selectedPlacementName: String?
     @State private var capturedPhoto: CapturedARPhoto?
+    @State private var isControlPanelExpanded = false
 
     /// iPadの大画面で操作パネルや案内が間延びしないようにする最大幅。
     private static let contentMaxWidth: CGFloat = 540
@@ -392,11 +393,23 @@ struct ARCameraScreen: View {
     }
 
     /// 推し情報・選択・サイズを1枚にまとめたパネル。
+    /// 既定では推し名のバーだけを表示し、タップで推しピッカーとサイズ調整を展開する。
+    /// 撮影時に画面下半分が隠れないよう、普段は畳んでおける。
     private var controlPanel: some View {
         VStack(spacing: 10) {
-            selectedCharacterSummary
-            characterPicker
-            sizeControl
+            Button {
+                withAnimation(.easeInOut(duration: 0.22)) {
+                    isControlPanelExpanded.toggle()
+                }
+            } label: {
+                selectedCharacterSummary
+            }
+            .buttonStyle(.plain)
+
+            if isControlPanelExpanded {
+                characterPicker
+                sizeControl
+            }
         }
         .padding(.vertical, 12)
         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 26))
@@ -490,8 +503,14 @@ struct ARCameraScreen: View {
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                 }
+
+                Image(systemName: "chevron.up")
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(.secondary)
+                    .rotationEffect(.degrees(isControlPanelExpanded ? 180 : 0))
             }
             .padding(.horizontal, 18)
+            .contentShape(Rectangle())
         }
     }
 
