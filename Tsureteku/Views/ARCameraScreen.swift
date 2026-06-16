@@ -411,8 +411,8 @@ struct ARCameraScreen: View {
                 sizeControl
             }
         }
-        .padding(.vertical, 12)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 26))
+        .padding(.vertical, 10)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 24))
         .padding(.horizontal, 14)
     }
 
@@ -460,7 +460,8 @@ struct ARCameraScreen: View {
                     } label: {
                         CharacterThumbnailView(
                             character: character,
-                            isSelected: character.id == selectedCharacterID
+                            isSelected: character.id == selectedCharacterID,
+                            compact: true
                         )
                     }
                     .buttonStyle(.plain)

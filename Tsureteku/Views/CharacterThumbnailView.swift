@@ -10,6 +10,10 @@ import SwiftUI
 struct CharacterThumbnailView: View {
     let character: ToyCharacter
     var isSelected = false
+    /// 撮影画面のピッカー用。サムネを小さくし、名前ラベルを省いて高さを詰める。
+    var compact = false
+
+    private var side: CGFloat { compact ? 54 : 76 }
 
     var body: some View {
         VStack(spacing: 8) {
@@ -20,17 +24,17 @@ struct CharacterThumbnailView: View {
                         RoundedRectangle(cornerRadius: 8)
                             .stroke(isSelected ? Color.accentColor : Color.clear, lineWidth: 2)
                     }
-                    .frame(width: 76, height: 76)
+                    .frame(width: side, height: side)
 
                 if let image = CharacterImageStore.image(named: character.cutoutImageFileName, kind: .cutout) {
                     Image(uiImage: image)
                         .resizable()
                         .scaledToFit()
-                        .padding(7)
-                        .frame(width: 76, height: 76)
+                        .padding(compact ? 5 : 7)
+                        .frame(width: side, height: side)
                 } else {
                     Image(systemName: "teddybear")
-                        .font(.title2)
+                        .font(compact ? .body : .title2)
                         .foregroundStyle(.secondary)
                 }
 
@@ -40,21 +44,23 @@ struct CharacterThumbnailView: View {
                         HStack {
                             Spacer()
                             Image(systemName: "cube.fill")
-                                .font(.caption)
+                                .font(compact ? .caption2 : .caption)
                                 .foregroundStyle(.white)
-                                .padding(5)
+                                .padding(compact ? 3 : 5)
                                 .background(Color.accentColor, in: Circle())
-                                .padding(4)
+                                .padding(compact ? 3 : 4)
                         }
                     }
-                    .frame(width: 76, height: 76)
+                    .frame(width: side, height: side)
                 }
             }
 
-            Text(character.name)
-                .font(.caption)
-                .lineLimit(1)
-                .frame(width: 82)
+            if !compact {
+                Text(character.name)
+                    .font(.caption)
+                    .lineLimit(1)
+                    .frame(width: 82)
+            }
         }
     }
 }
