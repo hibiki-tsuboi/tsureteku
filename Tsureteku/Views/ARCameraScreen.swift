@@ -41,6 +41,8 @@ struct ARCameraScreen: View {
     @State private var selectedPlacementName: String?
     @State private var capturedPhoto: CapturedARPhoto?
     @State private var isControlPanelExpanded = false
+    /// 初回のAR撮影では推しピッカーの存在に気づけるよう、パネルを開いた状態で表示する。
+    @AppStorage("hasOpenedARControlPanel") private var hasOpenedARControlPanel = false
 
     /// iPadの大画面で操作パネルや案内が間延びしないようにする最大幅。
     private static let contentMaxWidth: CGFloat = 540
@@ -664,6 +666,12 @@ struct ARCameraScreen: View {
     }
 
     private func activateAR() {
+        // 初回だけパネルを開いて、推しピッカー・サイズ調整の存在に気づけるようにする。
+        if !hasOpenedARControlPanel {
+            isControlPanelExpanded = true
+            hasOpenedARControlPanel = true
+        }
+
         withAnimation(.easeInOut(duration: 0.25)) {
             isARActive = true
         }
