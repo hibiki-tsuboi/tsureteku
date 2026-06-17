@@ -12,6 +12,8 @@ struct CharacterThumbnailView: View {
     var isSelected = false
     /// 撮影画面のピッカー用。サムネを小さくし、名前ラベルを省いて高さを詰める。
     var compact = false
+    /// サムネ下の名前ラベルを表示するか。一覧の行など右側に名前を別途出す場面では false にする。
+    var showsName = true
 
     private var side: CGFloat { compact ? 54 : 76 }
 
@@ -55,7 +57,7 @@ struct CharacterThumbnailView: View {
                 }
             }
 
-            if !compact {
+            if !compact && showsName {
                 Text(character.name)
                     .font(.caption)
                     .lineLimit(1)

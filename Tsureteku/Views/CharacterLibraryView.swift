@@ -21,23 +21,24 @@ struct CharacterLibraryView: View {
                     emptyState
                 } else {
                     List {
-                        ForEach(characters) { character in
-                            NavigationLink {
-                                CharacterDetailView(character: character)
-                            } label: {
-                                characterRow(character)
-                            }
-                        }
-                        .onDelete(perform: deleteCharacters)
-
                         Section {
+                            ForEach(characters) { character in
+                                NavigationLink {
+                                    CharacterDetailView(character: character)
+                                } label: {
+                                    characterRow(character)
+                                }
+                            }
+                            .onDelete(perform: deleteCharacters)
                         } footer: {
                             Text(Self.versionText)
                                 .frame(maxWidth: .infinity, alignment: .center)
                                 .padding(.top, 8)
                         }
                     }
-                    .listStyle(.plain)
+                    .listStyle(.insetGrouped)
+                    .listSectionSpacing(.compact)
+                    .contentMargins(.top, 0, for: .scrollContent)
                 }
             }
             .navigationTitle("")
@@ -60,18 +61,26 @@ struct CharacterLibraryView: View {
     }
 
     private var emptyState: some View {
-        WelcomeEmptyState(
-            icon: "teddybear.fill",
-            title: "推しをつれていこう",
-            message: "お気に入りの推しを撮って登録すると、ARで一緒に写真が撮れるよ。",
-            actionTitle: "最初の推しを登録",
-            action: { isAddingCharacter = true }
-        )
+        ZStack(alignment: .bottom) {
+            WelcomeEmptyState(
+                icon: "teddybear.fill",
+                title: "推しをつれていこう",
+                message: "お気に入りの推しを撮って登録すると、ARで一緒に写真が撮れるよ。",
+                actionTitle: "最初の推しを登録",
+                action: { isAddingCharacter = true }
+            )
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+            Text(Self.versionText)
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .padding(.bottom, 12)
+        }
     }
 
     private func characterRow(_ character: ToyCharacter) -> some View {
         HStack(spacing: 14) {
-            CharacterThumbnailView(character: character)
+            CharacterThumbnailView(character: character, showsName: false)
                 .frame(width: 86)
 
             VStack(alignment: .leading, spacing: 4) {
@@ -81,6 +90,9 @@ struct CharacterLibraryView: View {
                 Text(Self.relativeDateText(character.createdAt))
                     .font(.caption)
                     .foregroundStyle(.secondary)
+            }
+            .alignmentGuide(.listRowSeparatorLeading) { dimensions in
+                dimensions[.leading]
             }
 
             Spacer()
