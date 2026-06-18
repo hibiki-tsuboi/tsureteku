@@ -1,10 +1,10 @@
 # Project Tsureteku
 
 ## Project Overview
-Tsureteku は、SwiftUI と SwiftData を使用したシンプルな iOS アプリケーションです。アイテム（`Item`）のリストを表示し、追加および削除する機能を備えています。
+Tsureteku（つれてく）は、SwiftUI と SwiftData を使用した AR iOS アプリです。お気に入りの「推し」（ぬいぐるみ・フィギュア等）を写真の自動切り抜きや3Dスキャン（Object Capture / USDZ）で登録し、ARで床・机・壁や自撮りで一緒に配置して写真・動画を撮影できます。データは端末内にのみ保存されます。
 
-- **Main Technologies**: Swift, SwiftUI, SwiftData, Xcode
-- **Architecture**: 標準的な SwiftUI + SwiftData アプリ構成
+- **Main Technologies**: Swift, SwiftUI, SwiftData, RealityKit, ARKit, Vision, Xcode
+- **Deployment Target**: iOS 18.0
 - **Source Code**: `Tsureteku/` ディレクトリに主要なソースコードが格納されています。
 
 ## Building and Running
@@ -51,11 +51,15 @@ xcodebuild -project Tsureteku.xcodeproj -scheme Tsureteku test -destination 'pla
 
 ## Project Structure
 - `Tsureteku/`: ソースコードとアセット
-  - `TsuretekuApp.swift`: アプリのエントリポイント、SwiftData の `ModelContainer` 設定
-  - `ContentView.swift`: メイン UI（リスト表示、追加/削除機能）
-  - `Item.swift`: SwiftData モデルクラス
+  - `TsuretekuApp.swift`: アプリのエントリポイント、`ModelContainer` 設定（`ToyCharacter`, `CapturedPhoto`）
+  - `ContentView.swift`: ルートの `TabView`（AR / 推し / 履歴）
+  - `Models/`: SwiftData モデル（`ToyCharacter`, `CapturedPhoto`）
+  - `Views/`: 各画面（推し登録/一覧/詳細、Object Capture、写真履歴 など）
+  - `AR/`: RealityKit/ARKit の AR ビュー（`ARCharacterView`）
+  - `Services/`: ファイル保存・画像処理（`CharacterImageStore`, `SubjectCutoutService` など）
+  - `Theme/`: ブランドカラー・スタイル
   - `Assets.xcassets/`: アプリアイコンやカラーセット
-- `Tsureteku.xcodeproj/`: Xcode プロジェクトファイル
+- `Tsureteku.xcodeproj/`: Xcode プロジェクトファイル（`Tsureteku/` 配下のファイルは自動でターゲットに追加されます）
 - `AGENTS.md`: リポジトリの詳細なガイドライン
 - `README.md`: プロジェクトの基本情報
 

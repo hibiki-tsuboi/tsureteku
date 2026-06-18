@@ -1,15 +1,19 @@
 # Repository Guidelines
 
 ## Project Structure & Module Organization
-This repository is a small SwiftUI + SwiftData iOS app.
-- Source: `Tsureteku/` (App entry, views, models)
-  - `TsuretekuApp.swift` — app bootstrap and data model container setup
-  - `ContentView.swift` — primary UI flow
-  - `Item.swift` — SwiftData model
+This repository is a SwiftUI + SwiftData AR iOS app ("つれてく"): register a 推し (plush toy / figure) from a photo cutout or a 3D scan and place it in AR to take photos and videos.
+- Source: `Tsureteku/`
+  - `TsuretekuApp.swift` — app bootstrap and `ModelContainer` setup (`ToyCharacter`, `CapturedPhoto`)
+  - `ContentView.swift` — root `TabView` (AR / 推し / 履歴)
+  - `Models/` — SwiftData `@Model` types (`ToyCharacter`, `CapturedPhoto`)
+  - `Views/` — feature screens (character add/library/detail, Object Capture flow, photo history)
+  - `AR/` — RealityKit/ARKit AR view (`ARCharacterView`)
+  - `Services/` — file stores and image processing (`CharacterImageStore`, `SubjectCutoutService`, …)
+  - `Theme/` — brand colors and styles
 - Assets: `Tsureteku/Assets.xcassets/`
-- Xcode project: `Tsureteku.xcodeproj/`
+- Xcode project: `Tsureteku.xcodeproj/` (file-system-synchronized group — files added under `Tsureteku/` are picked up automatically)
 
-Keep feature code grouped by concern in new folders under `Tsureteku/` (for example, `Views/`, `Models/`, `Services/`) as they are added.
+Group new feature code by concern under the existing folders (`Views/`, `Models/`, `Services/`, `AR/`, `Theme/`).
 
 ## Build, Test, and Development Commands
 - `open Tsureteku.xcodeproj`  
