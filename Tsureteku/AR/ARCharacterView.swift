@@ -824,9 +824,9 @@ struct ARCharacterView: UIViewRepresentable {
         }
 
         private func makeSelectionMarker(width: Float, depth: Float, baseY: Float) -> Entity {
-            // ブランドのミント (#3FE0B8) で足元に丸いリングを描き、選択中を柔らかく示す。
-            let mint = UIColor(red: 0.247, green: 0.878, blue: 0.722, alpha: 1.0)
-            var material = UnlitMaterial(color: mint.withAlphaComponent(0.85))
+            // アプリアイコンに合わせ、白で足元に丸いリングを描き、選択中を柔らかく示す。
+            let ringColor = UIColor.white
+            var material = UnlitMaterial(color: ringColor.withAlphaComponent(0.85))
             material.blending = .transparent(opacity: 0.85)
             material.faceCulling = .none
 
