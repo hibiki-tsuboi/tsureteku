@@ -132,8 +132,9 @@ struct ARCameraScreen: View {
             // 操作系を出さず、写り込みを最小化した上部HUDだけにする。
             VStack(spacing: 0) {
                 if isRecording {
-                    recordingHUD
+                    recordingIndicator
                     Spacer()
+                    recordingStopControl
                 } else {
                     arHeader
                     Spacer()
@@ -361,46 +362,47 @@ struct ARCameraScreen: View {
         .accessibilityLabel("動画を撮影")
     }
 
-    /// 録画中に表示する最小限のHUD。経過時間インジケータと停止ボタンだけを
-    /// 画面上部の細いバーにまとめ、録画動画への写り込みを抑える。
-    private var recordingHUD: some View {
-        HStack(spacing: 10) {
-            HStack(spacing: 6) {
-                Circle()
-                    .fill(.red)
-                    .frame(width: 9, height: 9)
+    /// 録画中に画面上部・中央へ出す経過時間インジケータ。停止操作は下中央の
+    /// recordingStopControl にまとめ、上部は録画動画への写り込みを抑えた最小表示にする。
+    private var recordingIndicator: some View {
+        HStack(spacing: 6) {
+            Circle()
+                .fill(.red)
+                .frame(width: 9, height: 9)
 
-                if let recordingStartDate {
-                    Text(timerInterval: recordingStartDate...Date.distantFuture, countsDown: false)
-                        .font(.callout.weight(.semibold).monospacedDigit())
-                } else {
-                    Text("録画中")
-                        .font(.callout.weight(.semibold))
-                }
+            if let recordingStartDate {
+                Text(timerInterval: recordingStartDate...Date.distantFuture, countsDown: false)
+                    .font(.callout.weight(.semibold).monospacedDigit())
+            } else {
+                Text("録画中")
+                    .font(.callout.weight(.semibold))
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 7)
-            .background(.ultraThinMaterial, in: Capsule())
-
-            Spacer()
-
-            Button {
-                stopRecording()
-            } label: {
-                Label("停止", systemImage: "stop.fill")
-                    .font(.subheadline.weight(.semibold))
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 8)
-            }
-            .buttonStyle(.borderedProminent)
-            .tint(.red)
-            .clipShape(Capsule())
-            .accessibilityLabel("録画を停止")
         }
-        .padding(.horizontal, 18)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 7)
+        .background(.ultraThinMaterial, in: Capsule())
         .padding(.top, 12)
-        .frame(maxWidth: Self.contentMaxWidth)
-        .frame(maxWidth: .infinity)
+    }
+
+    /// 録画停止ボタン。録画開始ボタンと指の位置がずれないよう、撮影系と同じ
+    /// 下中央に置く。シャッターと同サイズのリングに赤い停止マークを重ねる。
+    private var recordingStopControl: some View {
+        Button {
+            stopRecording()
+        } label: {
+            ZStack {
+                Circle()
+                    .stroke(.white.opacity(0.85), lineWidth: 4)
+                    .frame(width: 78, height: 78)
+
+                RoundedRectangle(cornerRadius: 6)
+                    .fill(.red)
+                    .frame(width: 30, height: 30)
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("録画を停止")
+        .padding(.bottom, 12)
     }
 
     /// 推し情報・選択・サイズを1枚にまとめたパネル。
