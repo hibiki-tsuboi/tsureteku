@@ -167,6 +167,9 @@ struct ARCharacterView: UIViewRepresentable {
         var isSelfieMode = false
         private var placements: [PlacedCharacter] = []
         private var selectedPlacementID: UUID?
+        /// 推しの配置（特に3Dモデルの非同期ロード）中は true。連打による多重配置を防ぐ。
+        private var isPlacing = false
+        private var placementCancellable: Cancellable?
         private weak var coachingOverlay: ARCoachingOverlayView?
         private var selfieAssetID: UUID?
         private var selfieSize: Float?
@@ -408,12 +411,27 @@ struct ARCharacterView: UIViewRepresentable {
                 return
             }
 
-            do {
-                let placement = try place(selectedAsset, at: result, in: arView)
-                selectPlacement(placement)
-                onStatus("\(selectedAsset.name)を配置しました。")
-            } catch {
-                onStatus(error.localizedDescription)
+            guard !isPlacing else {
+                return
+            }
+
+            isPlacing = true
+            let asset = selectedAsset
+            onStatus("\(asset.name)を読み込み中…")
+
+            place(asset, at: result, in: arView) { [weak self] outcome in
+                guard let self else {
+                    return
+                }
+                self.isPlacing = false
+
+                switch outcome {
+                case .success(let placement):
+                    self.selectPlacement(placement)
+                    self.onStatus("\(placement.name)を配置しました。")
+                case .failure(let error):
+                    self.onStatus(error.localizedDescription)
+                }
             }
         }
 
@@ -447,12 +465,17 @@ struct ARCharacterView: UIViewRepresentable {
             }
         }
 
-        @discardableResult
-        private func place(_ asset: CharacterARAsset, at result: ARRaycastResult, in arView: ARView) throws -> PlacedCharacter {
+        private func place(
+            _ asset: CharacterARAsset,
+            at result: ARRaycastResult,
+            in arView: ARView,
+            completion: @escaping (Result<PlacedCharacter, Error>) -> Void
+        ) {
             if let modelFileName = asset.modelFileName {
-                try placeModel(asset, modelFileName: modelFileName, at: result, in: arView)
+                placeModel(asset, modelFileName: modelFileName, at: result, in: arView, completion: completion)
             } else {
-                try placeCutout(asset, at: result, in: arView)
+                // 写真切り抜きは軽量なので同期のまま実行し、結果をコールバックへ渡す。
+                completion(Result { try placeCutout(asset, at: result, in: arView) })
             }
         }
 
@@ -601,10 +624,42 @@ struct ARCharacterView: UIViewRepresentable {
             _ asset: CharacterARAsset,
             modelFileName: String,
             at result: ARRaycastResult,
+            in arView: ARView,
+            completion: @escaping (Result<PlacedCharacter, Error>) -> Void
+        ) {
+            let modelURL: URL
+            do {
+                modelURL = try CharacterImageStore.modelURL(for: modelFileName)
+            } catch {
+                completion(.failure(error))
+                return
+            }
+
+            // 同期 loadModel はメインスレッドを固め、その間に溜まったタップで多重配置が起きていた。
+            // 非同期ロードに切り替え、ロード中は isPlacing ガードで追加タップを無視する。
+            placementCancellable = ModelEntity.loadModelAsync(contentsOf: modelURL, withName: asset.id.uuidString)
+                .sink(receiveCompletion: { [weak self] result in
+                    if case .failure(let error) = result {
+                        self?.placementCancellable = nil
+                        completion(.failure(error))
+                    }
+                }, receiveValue: { [weak self] entity in
+                    guard let self else {
+                        return
+                    }
+                    self.placementCancellable = nil
+                    let placement = self.assemblePlacement(entity, asset: asset, at: result, in: arView)
+                    completion(.success(placement))
+                })
+        }
+
+        /// ロード済みの ModelEntity を整え、シーンへ配置して PlacedCharacter を返す。
+        private func assemblePlacement(
+            _ entity: ModelEntity,
+            asset: CharacterARAsset,
+            at result: ARRaycastResult,
             in arView: ARView
-        ) throws -> PlacedCharacter {
-            let modelURL = try CharacterImageStore.modelURL(for: modelFileName)
-            let entity = try ModelEntity.loadModel(contentsOf: modelURL, withName: asset.id.uuidString)
+        ) -> PlacedCharacter {
             let bounds = entity.visualBounds(recursive: true, relativeTo: entity)
             let maxExtent = max(bounds.extents.x, bounds.extents.y, bounds.extents.z)
             let scale = maxExtent > 0 ? asset.defaultSizeMeters / maxExtent : asset.defaultSizeMeters
