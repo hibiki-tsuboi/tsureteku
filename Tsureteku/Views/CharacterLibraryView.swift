@@ -28,8 +28,14 @@ struct CharacterLibraryView: View {
                                 } label: {
                                     characterRow(character)
                                 }
+                                .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                                    Button(role: .destructive) {
+                                        delete(character)
+                                    } label: {
+                                        Label("削除", systemImage: "trash")
+                                    }
+                                }
                             }
-                            .onDelete(perform: deleteCharacters)
                         } footer: {
                             Text(Self.versionText)
                                 .frame(maxWidth: .infinity, alignment: .center)
@@ -134,15 +140,12 @@ struct CharacterLibraryView: View {
         return "\(year)/\(month)/\(day)"
     }
 
-    private func deleteCharacters(offsets: IndexSet) {
-        for index in offsets {
-            let character = characters[index]
-            CharacterImageStore.deleteIfExists(fileName: character.originalImageFileName, kind: .original)
-            CharacterImageStore.deleteIfExists(fileName: character.cutoutImageFileName, kind: .cutout)
-            CharacterImageStore.deleteModelIfExists(fileName: character.modelFileName)
-            CharacterImageStore.deleteObjectCaptureDirectoryIfExists(directoryName: character.objectCaptureDirectoryName)
-            modelContext.delete(character)
-        }
+    private func delete(_ character: ToyCharacter) {
+        CharacterImageStore.deleteIfExists(fileName: character.originalImageFileName, kind: .original)
+        CharacterImageStore.deleteIfExists(fileName: character.cutoutImageFileName, kind: .cutout)
+        CharacterImageStore.deleteModelIfExists(fileName: character.modelFileName)
+        CharacterImageStore.deleteObjectCaptureDirectoryIfExists(directoryName: character.objectCaptureDirectoryName)
+        modelContext.delete(character)
 
         try? modelContext.save()
     }
