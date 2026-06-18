@@ -17,6 +17,9 @@ struct CharacterThumbnailView: View {
 
     private var side: CGFloat { compact ? 54 : 76 }
 
+    /// 表示サイズ（最大76pt）に対し、Retina(3x)でも十分な縮小デコード上限。
+    private var thumbnailMaxPixelSize: CGFloat { compact ? 200 : 320 }
+
     var body: some View {
         VStack(spacing: 8) {
             ZStack {
@@ -28,7 +31,7 @@ struct CharacterThumbnailView: View {
                     }
                     .frame(width: side, height: side)
 
-                if let image = CharacterImageStore.image(named: character.cutoutImageFileName, kind: .cutout) {
+                if let image = CharacterImageStore.thumbnail(named: character.cutoutImageFileName, kind: .cutout, maxPixelSize: thumbnailMaxPixelSize) {
                     Image(uiImage: image)
                         .resizable()
                         .scaledToFit()

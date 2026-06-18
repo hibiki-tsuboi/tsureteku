@@ -61,7 +61,7 @@ private struct CapturedPhotoGridCell: View {
                 RoundedRectangle(cornerRadius: 8)
                     .fill(.thinMaterial)
 
-                if let image = CapturedPhotoStore.image(named: photo.imageFileName) {
+                if let image = CapturedPhotoStore.thumbnail(named: photo.imageFileName, maxPixelSize: 600) {
                     Image(uiImage: image)
                         .resizable()
                         .scaledToFill()
@@ -88,6 +88,7 @@ private struct CapturedPhotoDetailView: View {
 
     let photo: CapturedPhoto
 
+    @State private var image: UIImage?
     @State private var isShareSheetPresented = false
     @State private var isDeleteConfirmationPresented = false
 
@@ -96,7 +97,7 @@ private struct CapturedPhotoDetailView: View {
             Color.black
                 .ignoresSafeArea()
 
-            if let image = CapturedPhotoStore.image(named: photo.imageFileName) {
+            if let image {
                 Image(uiImage: image)
                     .resizable()
                     .scaledToFit()
@@ -107,6 +108,9 @@ private struct CapturedPhotoDetailView: View {
                 }
                 .foregroundStyle(.white)
             }
+        }
+        .task(id: photo.imageFileName) {
+            image = CapturedPhotoStore.image(named: photo.imageFileName)
         }
         .navigationTitle(photo.createdAt.formatted(.dateTime.year().month().day()))
         .navigationBarTitleDisplayMode(.inline)
@@ -119,7 +123,7 @@ private struct CapturedPhotoDetailView: View {
                 } label: {
                     Image(systemName: "square.and.arrow.up")
                 }
-                .disabled(CapturedPhotoStore.image(named: photo.imageFileName) == nil)
+                .disabled(image == nil)
                 .accessibilityLabel("共有")
 
                 Button(role: .destructive) {
@@ -131,7 +135,7 @@ private struct CapturedPhotoDetailView: View {
             }
         }
         .sheet(isPresented: $isShareSheetPresented) {
-            if let image = CapturedPhotoStore.image(named: photo.imageFileName) {
+            if let image {
                 PhotoShareSheet(image: image)
             }
         }

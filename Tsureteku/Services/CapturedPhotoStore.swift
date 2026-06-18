@@ -40,6 +40,15 @@ enum CapturedPhotoStore {
         return UIImage(contentsOfFile: url.path)
     }
 
+    /// 一覧・サムネ表示用に縮小・キャッシュした画像を返す。
+    static func thumbnail(named fileName: String, maxPixelSize: CGFloat) -> UIImage? {
+        guard let url = try? url(for: fileName) else {
+            return nil
+        }
+
+        return ImageThumbnailCache.shared.thumbnail(at: url, maxPixelSize: maxPixelSize)
+    }
+
     static func deleteIfExists(fileName: String?) {
         guard let fileName,
               let url = try? url(for: fileName) else {
