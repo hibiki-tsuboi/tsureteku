@@ -495,10 +495,6 @@ struct ObjectCaptureWorkflowView: View {
         numberOfShotsTaken >= minimumShotsForModel
     }
 
-    private var shotsNeededForModel: Int {
-        max(0, minimumShotsForModel - numberOfShotsTaken)
-    }
-
     private var minimumShotsForModel: Int {
         20
     }
