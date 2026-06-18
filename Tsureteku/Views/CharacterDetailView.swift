@@ -61,13 +61,13 @@ struct CharacterDetailView: View {
                     Label("未登録", systemImage: "cube.transparent")
                         .foregroundStyle(.secondary)
                 } else {
-                    Label("USDZ登録済み", systemImage: "cube.fill")
+                    Label("登録済み", systemImage: "cube.fill")
                 }
 
                 Button {
                     isImportingModel = true
                 } label: {
-                    Label(character.modelFileName == nil ? "USDZを登録" : "USDZを差し替え", systemImage: "square.and.arrow.down")
+                    Label(character.modelFileName == nil ? "3Dモデルを登録（USDZ）" : "3Dモデルを差し替え（USDZ）", systemImage: "square.and.arrow.down")
                 }
 
                 if character.modelFileName != nil {
@@ -91,18 +91,18 @@ struct CharacterDetailView: View {
                 }
             }
 
-            Section("Object Capture") {
+            Section("3D撮影") {
                 if ObjectCaptureSession.isSupported {
                     Button {
                         isCaptureFlowPresented = true
                     } label: {
-                        Label("3D撮影セットを作る", systemImage: "camera.aperture")
+                        Label("3D撮影して作る", systemImage: "camera.aperture")
                     }
                 } else {
-                    Label("3D撮影セットを作る", systemImage: "camera.aperture")
+                    Label("3D撮影して作る", systemImage: "camera.aperture")
                         .foregroundStyle(.secondary)
 
-                    Label("この端末では使えません（USDZ登録は可能）", systemImage: "exclamationmark.circle")
+                    Label("この端末では使えません（3Dモデルの登録は可能）", systemImage: "exclamationmark.circle")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }

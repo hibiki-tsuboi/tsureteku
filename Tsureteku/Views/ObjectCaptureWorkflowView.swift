@@ -481,13 +481,13 @@ struct ObjectCaptureWorkflowView: View {
     private var trackingLabelText: String {
         switch cameraTracking {
         case .notAvailable:
-            return "追跡未取得"
+            return "認識の準備中"
         case .normal:
-            return "追跡良好"
+            return "認識良好"
         case .limited:
-            return "追跡制限中"
+            return "認識が不安定"
         @unknown default:
-            return "追跡確認中"
+            return "確認中"
         }
     }
 
