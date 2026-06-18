@@ -15,6 +15,8 @@ import _RealityKit_SwiftUI
 struct ObjectCaptureWorkflowView: View {
     @Environment(\.modelContext) private var modelContext
     @Bindable var character: ToyCharacter
+    /// 3Dモデルの作成に成功したときに呼ばれる。撮影フローを閉じて詳細画面へ戻すために使う。
+    var onModelCreated: () -> Void = {}
 
     @StateObject private var sessionStore = ObjectCaptureSessionStore()
     @State private var didStartSession = false
@@ -28,6 +30,12 @@ struct ObjectCaptureWorkflowView: View {
     @State private var reconstructionProgress = 0.0
     @State private var reconstructionStatus = ""
     @State private var errorMessage: String?
+    /// モデル生成中に「使えなかった写真」の枚数。失敗時の原因案内に使う。
+    @State private var unusableSampleCount = 0
+    /// 直近のモデル生成が失敗したか。リトライ導線の出し分けに使う。
+    @State private var reconstructionFailed = false
+    /// 作成成功を伝えるアラートの表示状態。
+    @State private var showCreationSuccessAlert = false
     @State private var statusMessage: String?
     @State private var didRequestDetection = false
     @State private var didRequestCapture = false
@@ -64,6 +72,13 @@ struct ObjectCaptureWorkflowView: View {
         .navigationTitle("3D撮影")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(.hidden, for: .tabBar)
+        .alert("3Dモデルができました", isPresented: $showCreationSuccessAlert) {
+            Button("OK") {
+                onModelCreated()
+            }
+        } message: {
+            Text("\(character.name)の3Dモデルを作成しました。AR配置で使えます。")
+        }
         .onDisappear {
             if !isReconstructing {
                 session.cancel()
@@ -277,8 +292,11 @@ struct ObjectCaptureWorkflowView: View {
                 Button {
                     reconstructModel()
                 } label: {
-                    Label("3Dモデルを作成", systemImage: "cube")
-                        .frame(maxWidth: .infinity)
+                    Label(
+                        reconstructionFailed ? "もう一度作成する" : "3Dモデルを作成",
+                        systemImage: reconstructionFailed ? "arrow.clockwise" : "cube"
+                    )
+                    .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.borderedProminent)
                 .disabled(isReconstructing || !canGenerateModel)
@@ -346,13 +364,18 @@ struct ObjectCaptureWorkflowView: View {
             .disabled(true)
 
         case .completed:
-            Button {
-                restartCaptureSet()
-            } label: {
-                Label("撮り直す", systemImage: "arrow.counterclockwise")
-                    .frame(maxWidth: .infinity)
+            let retakeLabel = Label("撮り直す", systemImage: "arrow.counterclockwise")
+                .frame(maxWidth: .infinity)
+            // 生成に失敗したときは、撮り直しが有力な選択肢なので目立たせる。
+            if reconstructionFailed {
+                Button(action: restartCaptureSet) { retakeLabel }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(isReconstructing)
+            } else {
+                Button(action: restartCaptureSet) { retakeLabel }
+                    .buttonStyle(.bordered)
+                    .disabled(isReconstructing)
             }
-            .buttonStyle(.bordered)
 
         case .failed:
             Button {
@@ -428,7 +451,7 @@ struct ObjectCaptureWorkflowView: View {
 
     private var actionHint: String? {
         if isReconstructing {
-            return "生成が終わると、この推しの3Dモデルとして登録されます。"
+            return "作成が終わると、この推しの3Dモデルとして登録されます。"
         }
 
         if case .completed = captureState {
@@ -436,7 +459,7 @@ struct ObjectCaptureWorkflowView: View {
                 return "作成した3DモデルはAR配置で自動的に使われます。"
             }
 
-            return "3Dモデル作成には20枚以上を目安にしてください。あと\(shotsNeededForModel)枚撮ると作成できます。"
+            return "3Dモデル作成には20枚以上が目安です。今は\(numberOfShotsTaken)枚なので、「撮り直す」から推しの周りをゆっくり多めに撮影してください。"
         }
 
         switch captureState {
@@ -479,7 +502,8 @@ struct ObjectCaptureWorkflowView: View {
     private var canFinish: Bool {
         switch captureState {
         case .capturing, .detecting:
-            numberOfShotsTaken > 0
+            // 3Dモデル作成に必要な枚数（20枚）に満たないうちは完了させない。
+            canGenerateModel
         default:
             false
         }
@@ -538,6 +562,8 @@ struct ObjectCaptureWorkflowView: View {
         reconstructionProgress = 0
         reconstructionStatus = ""
         errorMessage = nil
+        unusableSampleCount = 0
+        reconstructionFailed = false
         statusMessage = nil
         didRequestDetection = false
         didRequestCapture = false
@@ -592,7 +618,7 @@ struct ObjectCaptureWorkflowView: View {
                 CharacterImageStore.deleteObjectCaptureDirectoryIfExists(directoryName: previousCaptureDirectoryName)
                 self.previousCaptureDirectoryName = nil
             }
-            statusMessage = "撮影データを保存しました。3Dモデルを生成できます。"
+            statusMessage = "撮影データを保存しました。3Dモデルを作成できます。"
 
         case .failed:
             didRequestDetection = false
@@ -704,6 +730,8 @@ struct ObjectCaptureWorkflowView: View {
                 reconstructionProgress = 0
                 reconstructionStatus = "準備中"
                 errorMessage = nil
+                unusableSampleCount = 0
+                reconstructionFailed = false
 
                 var configuration = PhotogrammetrySession.Configuration()
                 configuration.isObjectMaskingEnabled = true
@@ -720,15 +748,15 @@ struct ObjectCaptureWorkflowView: View {
                     switch outputEvent {
                     case .requestProgress(_, let fractionComplete):
                         reconstructionProgress = fractionComplete
-                        reconstructionStatus = "生成中"
+                        reconstructionStatus = "作成中"
 
                     case .requestProgressInfo(_, let progressInfo):
-                        reconstructionStatus = progressInfo.processingStage.map(stageText) ?? "生成中"
+                        reconstructionStatus = progressInfo.processingStage.map(stageText) ?? "作成中"
 
                     case .requestComplete(_, .modelFile):
                         didCompleteModel = true
                         reconstructionProgress = 1
-                        reconstructionStatus = "モデル生成完了"
+                        reconstructionStatus = "モデル作成完了"
 
                     case .requestError(_, let error):
                         throw error
@@ -741,15 +769,20 @@ struct ObjectCaptureWorkflowView: View {
                             try? modelContext.save()
                         }
                         isReconstructing = false
+                        if didCompleteModel {
+                            showCreationSuccessAlert = true
+                        }
 
                     case .processingCancelled:
                         isReconstructing = false
                         reconstructionStatus = "キャンセルしました"
 
                     case .invalidSample(_, let reason):
+                        unusableSampleCount += 1
                         reconstructionStatus = reason
 
                     case .skippedSample:
+                        unusableSampleCount += 1
                         reconstructionStatus = "一部の写真をスキップしました"
 
                     case .automaticDownsampling:
@@ -767,9 +800,18 @@ struct ObjectCaptureWorkflowView: View {
                 }
             } catch {
                 isReconstructing = false
-                errorMessage = error.localizedDescription
+                reconstructionFailed = true
+                errorMessage = reconstructionFailureMessage()
             }
         }
+    }
+
+    /// 生成失敗時に、原因の見当と次の一手をユーザーへ案内するメッセージを組み立てる。
+    private func reconstructionFailureMessage() -> String {
+        if unusableSampleCount > 0 {
+            return "3Dモデルの生成に失敗しました。\(unusableSampleCount)枚の写真が使えませんでした。明るい場所で、推しをゆっくり一周しながら撮り直すと成功しやすくなります。"
+        }
+        return "3Dモデルの生成に失敗しました。撮影中は推しと背景を動かさず、つるつる・透明・無地の推しは柄のある台に置くと認識されやすくなります。"
     }
 
     private func stageText(_ stage: PhotogrammetrySession.Output.ProcessingStage) -> String {

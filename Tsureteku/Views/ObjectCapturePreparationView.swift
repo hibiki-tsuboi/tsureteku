@@ -11,6 +11,7 @@ import SwiftUI
 
 struct ObjectCapturePreparationView: View {
     @Bindable var character: ToyCharacter
+    @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         Group {
@@ -124,7 +125,8 @@ struct ObjectCapturePreparationView: View {
     private var startFooter: some View {
         VStack(spacing: 8) {
             NavigationLink {
-                ObjectCaptureWorkflowView(character: character)
+                // 作成成功時はこの準備画面ごと閉じ、その上の撮影画面も一緒に閉じて詳細画面へ戻す。
+                ObjectCaptureWorkflowView(character: character, onModelCreated: { dismiss() })
             } label: {
                 Label("撮影を始める", systemImage: "camera.aperture")
                     .frame(maxWidth: .infinity)
