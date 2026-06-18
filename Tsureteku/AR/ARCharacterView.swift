@@ -6,6 +6,7 @@
 //
 
 import ARKit
+import Combine
 import CoreImage
 import CoreImage.CIFilterBuiltins
 import RealityKit
@@ -421,19 +422,28 @@ struct ARCharacterView: UIViewRepresentable {
             let wasMarkerEnabled = marker?.isEnabled ?? false
             marker?.isEnabled = false
 
-            arView.snapshot(saveToHDR: false) { [weak self] image in
-                guard let self else {
-                    return
+            // isEnabled=false の変更が描画へ反映されるのは次のレンダリング更新のため、
+            // ここで即 snapshot すると選択枠が写り込むことがある（特にモデル配置直後）。
+            // 次の SceneEvents.Update を一度だけ待ってから撮影し、枠が確実に消えた状態を撮る。
+            var subscription: Cancellable?
+            subscription = arView.scene.subscribe(to: SceneEvents.Update.self) { [weak self] _ in
+                subscription?.cancel()
+                subscription = nil
+
+                arView.snapshot(saveToHDR: false) { [weak self] image in
+                    marker?.isEnabled = wasMarkerEnabled
+
+                    guard let self else {
+                        return
+                    }
+
+                    guard let image else {
+                        self.onCapture(.failure(ARCaptureError.snapshotFailed))
+                        return
+                    }
+
+                    self.onCapture(.success(image))
                 }
-
-                marker?.isEnabled = wasMarkerEnabled
-
-                guard let image else {
-                    onCapture(.failure(ARCaptureError.snapshotFailed))
-                    return
-                }
-
-                self.onCapture(.success(image))
             }
         }
 
