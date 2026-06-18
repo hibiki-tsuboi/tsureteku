@@ -205,17 +205,6 @@ struct ARCameraScreen: View {
                     .clipShape(Circle())
                     .accessibilityLabel("配置をリセット")
                 }
-
-                Button {
-                    isAddingCharacter = true
-                } label: {
-                    Image(systemName: "plus")
-                        .font(.headline)
-                        .frame(width: 42, height: 42)
-                }
-                .buttonStyle(.borderedProminent)
-                .clipShape(Circle())
-                .accessibilityLabel("推し追加")
             }
         }
         .padding(.horizontal, 18)
