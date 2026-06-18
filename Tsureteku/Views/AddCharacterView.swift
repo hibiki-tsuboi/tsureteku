@@ -126,7 +126,7 @@ struct AddCharacterView: View {
                         .disabled(!canSave || isProcessing)
                 }
             }
-            .sheet(isPresented: $isCameraPresented) {
+            .fullScreenCover(isPresented: $isCameraPresented) {
                 CameraCaptureView { image in
                     process(image)
                 }

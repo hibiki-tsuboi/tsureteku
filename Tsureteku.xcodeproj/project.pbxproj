@@ -86,11 +86,12 @@
 				};
 			};
 			buildConfigurationList = B6F0CEA12FD842D500AF67B9 /* Build configuration list for PBXProject "Tsureteku" */;
-			developmentRegion = en;
+			developmentRegion = ja;
 			hasScannedForEncodings = 0;
 			knownRegions = (
 				en,
 				Base,
+				ja,
 			);
 			mainGroup = B6F0CE9D2FD842D500AF67B9;
 			minimizedProjectReferenceProxies = 1;
@@ -256,6 +257,7 @@
 				CURRENT_PROJECT_VERSION = 4;
 				DEVELOPMENT_TEAM = AK92W9FN2D;
 				ENABLE_PREVIEWS = YES;
+				DEVELOPMENT_LANGUAGE = ja;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "つれてく";
 				INFOPLIST_KEY_NSCameraUsageDescription = "ぬいぐるみを登録し、AR撮影するためにカメラを使用します。";
@@ -299,6 +301,7 @@
 				CURRENT_PROJECT_VERSION = 4;
 				DEVELOPMENT_TEAM = AK92W9FN2D;
 				ENABLE_PREVIEWS = YES;
+				DEVELOPMENT_LANGUAGE = ja;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "つれてく";
 				INFOPLIST_KEY_NSCameraUsageDescription = "ぬいぐるみを登録し、AR撮影するためにカメラを使用します。";
