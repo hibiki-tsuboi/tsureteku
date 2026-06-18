@@ -6,6 +6,8 @@
 //
 
 import ARKit
+import CoreImage
+import CoreImage.CIFilterBuiltins
 import RealityKit
 import SwiftUI
 import UIKit
@@ -184,6 +186,9 @@ struct ARCharacterView: UIViewRepresentable {
         func configure(_ arView: ARView) {
             arView.renderOptions.insert(.disableMotionBlur)
 
+            // 暗い室内でも推し（3Dモデル）が暗く沈まないよう、環境光をやや明るめに底上げする。
+            arView.environment.lighting.intensityExponent = Self.modelLightingIntensityExponent
+
             let tapGesture = UITapGestureRecognizer(target: self, action: #selector(handleTap(_:)))
             arView.addGestureRecognizer(tapGesture)
 
@@ -324,11 +329,7 @@ struct ARCharacterView: UIViewRepresentable {
                 entity = container
             } else {
                 let imageURL = try CharacterImageStore.url(for: asset.cutoutImageFileName, kind: .cutout)
-                let texture = try TextureResource.load(
-                    contentsOf: imageURL,
-                    withName: asset.id.uuidString,
-                    options: .init(semantic: .color, mipmapsMode: .allocateAndGenerateAll)
-                )
+                let texture = try brightenedColorTexture(contentsOf: imageURL, name: asset.id.uuidString)
 
                 let aspectRatio = max(0.25, min(4.0, Float(texture.width) / Float(max(texture.height, 1))))
                 let mesh = MeshResource.generatePlane(width: aspectRatio, height: 1.0)
@@ -544,11 +545,7 @@ struct ARCharacterView: UIViewRepresentable {
 
         private func placeCutout(_ asset: CharacterARAsset, at result: ARRaycastResult, in arView: ARView) throws -> PlacedCharacter {
             let imageURL = try CharacterImageStore.url(for: asset.cutoutImageFileName, kind: .cutout)
-            let texture = try TextureResource.load(
-                contentsOf: imageURL,
-                withName: asset.id.uuidString,
-                options: .init(semantic: .color, mipmapsMode: .allocateAndGenerateAll)
-            )
+            let texture = try brightenedColorTexture(contentsOf: imageURL, name: asset.id.uuidString)
 
             let aspectRatio = max(0.25, min(4.0, Float(texture.width) / Float(max(texture.height, 1))))
             let height = asset.defaultSizeMeters
@@ -714,6 +711,36 @@ struct ARCharacterView: UIViewRepresentable {
             }
 
             return nil
+        }
+
+        // MARK: - 明るさ補正
+
+        /// 3Dモデルに当たる環境光の強さ（指数）。1.0が等倍で、大きいほど明るい。
+        private static let modelLightingIntensityExponent: Float = 1.6
+        /// 写真切り抜きの推しを持ち上げる露出補正値（EV）。0で無補正。
+        private static let cutoutExposureBoost: Float = 0.6
+        private static let imageContext = CIContext()
+
+        /// 切り抜き画像を露出補正してからテクスチャ化する。補正に失敗した場合は元画像をそのまま読み込む。
+        private func brightenedColorTexture(contentsOf url: URL, name: String) throws -> TextureResource {
+            let options = TextureResource.CreateOptions(semantic: .color, mipmapsMode: .allocateAndGenerateAll)
+
+            guard Self.cutoutExposureBoost != 0,
+                  let source = UIImage(contentsOfFile: url.path)?.cgImage else {
+                return try TextureResource.load(contentsOf: url, withName: name, options: options)
+            }
+
+            let ciImage = CIImage(cgImage: source)
+            let filter = CIFilter.exposureAdjust()
+            filter.inputImage = ciImage
+            filter.ev = Self.cutoutExposureBoost
+
+            guard let output = filter.outputImage,
+                  let adjusted = Self.imageContext.createCGImage(output, from: ciImage.extent) else {
+                return try TextureResource.load(contentsOf: url, withName: name, options: options)
+            }
+
+            return try TextureResource.generate(from: adjusted, options: options)
         }
 
         private func makeContactShadow(width: Float, depth: Float, baseY: Float) -> ModelEntity {
