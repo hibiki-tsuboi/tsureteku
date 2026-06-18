@@ -622,7 +622,9 @@ struct ARCameraScreen: View {
     }
 
     private func selectInitialCharacterIfNeeded() {
-        guard selectedCharacter == nil else {
+        // selectedCharacter は characters.first にフォールバックするため判定に使えない。
+        // selectedCharacterID が実在の推しを指しているかで判定し、未選択なら先頭を選ぶ。
+        if let selectedCharacterID, characters.contains(where: { $0.id == selectedCharacterID }) {
             return
         }
 
