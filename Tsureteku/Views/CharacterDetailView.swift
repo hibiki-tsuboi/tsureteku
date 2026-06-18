@@ -17,6 +17,7 @@ struct CharacterDetailView: View {
 
     @State private var isImportingModel = false
     @State private var isModelDeleteConfirmationPresented = false
+    @State private var isCaptureFlowPresented = false
     @State private var shareableModel: ShareableModel?
     @State private var errorMessage: String?
 
@@ -92,8 +93,8 @@ struct CharacterDetailView: View {
 
             Section("Object Capture") {
                 if ObjectCaptureSession.isSupported {
-                    NavigationLink {
-                        ObjectCapturePreparationView(character: character)
+                    Button {
+                        isCaptureFlowPresented = true
                     } label: {
                         Label("3D撮影セットを作る", systemImage: "camera.aperture")
                     }
@@ -139,6 +140,13 @@ struct CharacterDetailView: View {
         }
         .sheet(item: $shareableModel) { model in
             ModelShareSheet(url: model.url)
+        }
+        .fullScreenCover(isPresented: $isCaptureFlowPresented) {
+            // 3D撮影フローはモーダルで開く。完成時の dismiss がモーダル境界をまたいで
+            // 確実に閉じ、詳細画面へ戻れるようにする（push中間ビューの dismiss は popしないため）。
+            NavigationStack {
+                ObjectCapturePreparationView(character: character)
+            }
         }
     }
 

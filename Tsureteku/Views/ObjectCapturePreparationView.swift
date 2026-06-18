@@ -23,6 +23,13 @@ struct ObjectCapturePreparationView: View {
         }
         .navigationTitle("3D撮影の準備")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .cancellationAction) {
+                Button("閉じる") {
+                    dismiss()
+                }
+            }
+        }
         .safeAreaInset(edge: .bottom) {
             if ObjectCaptureSession.isSupported {
                 startFooter

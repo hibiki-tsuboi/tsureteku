@@ -72,6 +72,10 @@ struct ObjectCaptureWorkflowView: View {
         .navigationTitle("3D撮影")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(.hidden, for: .tabBar)
+        // 生成中に戻ると、モデルは保存されるのに完成通知が出ないまま離脱してしまう。
+        // 完了アラート→詳細復帰の導線を必ず通すため、再構築中は戻る操作を無効化する。
+        .navigationBarBackButtonHidden(isReconstructing)
+        .interactiveDismissDisabled(isReconstructing)
         .alert("3Dモデルができました", isPresented: $showCreationSuccessAlert) {
             Button("OK") {
                 onModelCreated()
