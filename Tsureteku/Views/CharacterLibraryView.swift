@@ -47,8 +47,7 @@ struct CharacterLibraryView: View {
                     .contentMargins(.top, 0, for: .scrollContent)
                 }
             }
-            .navigationTitle("")
-            .navigationBarTitleDisplayMode(.inline)
+            .navigationTitle("推し")
             .toolbar {
                 if !characters.isEmpty {
                     ToolbarItem(placement: .primaryAction) {
