@@ -576,19 +576,6 @@ struct ARCharacterView: UIViewRepresentable {
             return placements.first { $0.id == selectedPlacementID }
         }
 
-        /// raycast結果の「位置」だけを使い、ワールド軸に揃った（回転なしの）アンカーを作る。
-        /// 平面の向きをアンカーへ継承させないことで、垂直面（壁）でも推しがワールド上方向に
-        /// まっすぐ立ち、上下オフセットやカメラを向く向き（いずれもワールド基準で計算）が
-        /// 水平面と同じく正しく効くようにする。
-        private func makeUprightAnchor(at result: ARRaycastResult) -> AnchorEntity {
-            let position = SIMD3<Float>(
-                result.worldTransform.columns.3.x,
-                result.worldTransform.columns.3.y,
-                result.worldTransform.columns.3.z
-            )
-            return AnchorEntity(world: position)
-        }
-
         private func placeCutout(_ asset: CharacterARAsset, at result: ARRaycastResult, in arView: ARView) throws -> PlacedCharacter {
             let imageURL = try CharacterImageStore.url(for: asset.cutoutImageFileName, kind: .cutout)
             let texture = try brightenedColorTexture(contentsOf: imageURL, name: asset.id.uuidString)
@@ -615,7 +602,7 @@ struct ARCharacterView: UIViewRepresentable {
             entity.addChild(shadow)
             entity.addChild(selectionMarker)
 
-            let anchor = makeUprightAnchor(at: result)
+            let anchor = AnchorEntity(raycastResult: result)
             anchor.addChild(entity)
             arView.scene.addAnchor(anchor)
             arView.installGestures([.translation, .rotation, .scale], for: entity)
@@ -692,7 +679,7 @@ struct ARCharacterView: UIViewRepresentable {
             // 3Dモデルは床面に実際の影を落とす（疑似的な接地影より自然）。
             entity.components.set(GroundingShadowComponent(castsShadow: true))
 
-            let anchor = makeUprightAnchor(at: result)
+            let anchor = AnchorEntity(raycastResult: result)
             anchor.addChild(entity)
             arView.scene.addAnchor(anchor)
             arView.installGestures([.translation, .rotation, .scale], for: entity)
