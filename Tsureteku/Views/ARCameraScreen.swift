@@ -35,6 +35,8 @@ struct ARCameraScreen: View {
     @State private var isResetConfirmationPresented = false
     @State private var isSelfieMode = false
     @State private var isRecording = false
+    /// 録画開始時刻。HUDの経過時間表示に使う。
+    @State private var recordingStartDate: Date?
     @State private var recordingPreview: RecordingPreviewItem?
     @State private var captureFlashOpacity = 0.0
     @State private var statusMessage: String?
@@ -126,16 +128,21 @@ struct ARCameraScreen: View {
                 .ignoresSafeArea()
                 .allowsHitTesting(false)
 
+            // ReplayKitは画面全体をそのまま録画するため、録画中はAR被写体に重なる
+            // 操作系を出さず、写り込みを最小化した上部HUDだけにする。
             VStack(spacing: 0) {
-                if !isRecording {
-                    arHeader
-                }
-                Spacer()
-                if characters.isEmpty {
-                    welcomeCard
+                if isRecording {
+                    recordingHUD
                     Spacer()
                 } else {
-                    bottomControls
+                    arHeader
+                    Spacer()
+                    if characters.isEmpty {
+                        welcomeCard
+                        Spacer()
+                    } else {
+                        bottomControls
+                    }
                 }
             }
         }
@@ -301,26 +308,21 @@ struct ARCameraScreen: View {
         }
     }
 
-    @ViewBuilder
     private var bottomControls: some View {
         VStack(spacing: 12) {
-            if isRecording {
-                recordingControls
-            } else {
-                if let statusMessage {
-                    Text(statusMessage)
-                        .font(.callout)
-                        .foregroundStyle(.primary)
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 8)
-                        .background(.ultraThinMaterial, in: Capsule())
-                        .transition(.opacity)
-                }
-
-                placementTools
-                controlPanel
-                captureControls
+            if let statusMessage {
+                Text(statusMessage)
+                    .font(.callout)
+                    .foregroundStyle(.primary)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 8)
+                    .background(.ultraThinMaterial, in: Capsule())
+                    .transition(.opacity)
             }
+
+            placementTools
+            controlPanel
+            captureControls
         }
         .frame(maxWidth: Self.contentMaxWidth)
         .frame(maxWidth: .infinity)
@@ -359,37 +361,46 @@ struct ARCameraScreen: View {
         .accessibilityLabel("動画を撮影")
     }
 
-    /// 録画中に表示する、停止ボタンと録画インジケータ。
-    private var recordingControls: some View {
-        VStack(spacing: 14) {
-            HStack(spacing: 8) {
+    /// 録画中に表示する最小限のHUD。経過時間インジケータと停止ボタンだけを
+    /// 画面上部の細いバーにまとめ、録画動画への写り込みを抑える。
+    private var recordingHUD: some View {
+        HStack(spacing: 10) {
+            HStack(spacing: 6) {
                 Circle()
                     .fill(.red)
-                    .frame(width: 10, height: 10)
+                    .frame(width: 9, height: 9)
 
-                Text("録画中")
-                    .font(.callout.weight(.semibold))
+                if let recordingStartDate {
+                    Text(timerInterval: recordingStartDate...Date.distantFuture, countsDown: false)
+                        .font(.callout.weight(.semibold).monospacedDigit())
+                } else {
+                    Text("録画中")
+                        .font(.callout.weight(.semibold))
+                }
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 8)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 7)
             .background(.ultraThinMaterial, in: Capsule())
+
+            Spacer()
 
             Button {
                 stopRecording()
             } label: {
-                ZStack {
-                    Circle()
-                        .stroke(.white.opacity(0.85), lineWidth: 4)
-                        .frame(width: 78, height: 78)
-
-                    RoundedRectangle(cornerRadius: 6)
-                        .fill(.red)
-                        .frame(width: 30, height: 30)
-                }
+                Label("停止", systemImage: "stop.fill")
+                    .font(.subheadline.weight(.semibold))
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 8)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.borderedProminent)
+            .tint(.red)
+            .clipShape(Capsule())
             .accessibilityLabel("録画を停止")
         }
+        .padding(.horizontal, 18)
+        .padding(.top, 12)
+        .frame(maxWidth: Self.contentMaxWidth)
+        .frame(maxWidth: .infinity)
     }
 
     /// 推し情報・選択・サイズを1枚にまとめたパネル。
@@ -698,6 +709,7 @@ struct ARCameraScreen: View {
                 }
 
                 UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                recordingStartDate = Date()
                 withAnimation(.easeInOut(duration: 0.2)) {
                     isRecording = true
                 }
@@ -708,6 +720,7 @@ struct ARCameraScreen: View {
     private func stopRecording() {
         RPScreenRecorder.shared().stopRecording { previewController, error in
             DispatchQueue.main.async {
+                recordingStartDate = nil
                 withAnimation(.easeInOut(duration: 0.2)) {
                     isRecording = false
                 }
