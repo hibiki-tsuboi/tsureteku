@@ -89,6 +89,7 @@ private struct CapturedPhotoDetailView: View {
     let photo: CapturedPhoto
 
     @State private var image: UIImage?
+    @State private var loadFailed = false
     @State private var isShareSheetPresented = false
     @State private var isDeleteConfirmationPresented = false
 
@@ -102,7 +103,8 @@ private struct CapturedPhotoDetailView: View {
                     .resizable()
                     .scaledToFit()
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else {
+            } else if loadFailed {
+                // 読み込み中はエラーを出さない（黒背景のまま）。読み込みを試みて失敗した時だけ表示。
                 ContentUnavailableView {
                     Label("写真を読み込めません", systemImage: "photo.badge.exclamationmark")
                 }
@@ -110,7 +112,9 @@ private struct CapturedPhotoDetailView: View {
             }
         }
         .task(id: photo.imageFileName) {
-            image = CapturedPhotoStore.image(named: photo.imageFileName)
+            let loaded = CapturedPhotoStore.image(named: photo.imageFileName)
+            image = loaded
+            loadFailed = (loaded == nil)
         }
         .navigationTitle(photo.createdAt.formatted(.dateTime.year().month().day()))
         .navigationBarTitleDisplayMode(.inline)
