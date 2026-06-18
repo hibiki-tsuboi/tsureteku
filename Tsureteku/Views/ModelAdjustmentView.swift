@@ -15,6 +15,10 @@ struct ModelAdjustmentView: View {
     @Bindable var character: ToyCharacter
 
     @State private var nativeSizeMeters: Double?
+    /// 横ドラッグ開始時の向き。ドラッグ量を加算する基準に使う。
+    @State private var dragStartYaw: Double?
+    /// ピンチ開始時のサイズ。拡大率を掛ける基準に使う。
+    @State private var pinchStartSize: Double?
 
     private var modelURL: URL? {
         guard let modelFileName = character.modelFileName else {
@@ -107,6 +111,8 @@ struct ModelAdjustmentView: View {
                     yawDegrees: character.modelYawDegrees,
                     verticalOffsetMeters: character.modelVerticalOffsetMeters
                 )
+                // タッチはSwiftUIのジェスチャーで扱うため、ARView自身のヒットテストは無効化する。
+                .allowsHitTesting(false)
             } else {
                 ContentUnavailableView {
                     Label("3Dモデルなし", systemImage: "cube.transparent")
@@ -118,6 +124,45 @@ struct ModelAdjustmentView: View {
                 .padding(.horizontal, 18)
                 .padding(.bottom, 10)
         }
+        .contentShape(Rectangle())
+        .gesture(rotationDrag.simultaneously(with: sizePinch))
+    }
+
+    /// 横ドラッグで向き（yaw）を回す。指の左右移動量を角度に変換する。
+    private var rotationDrag: some Gesture {
+        DragGesture()
+            .onChanged { value in
+                let start = dragStartYaw ?? character.modelYawDegrees
+                dragStartYaw = start
+                character.modelYawDegrees = wrappedYaw(start + Double(value.translation.width) * 0.6)
+            }
+            .onEnded { _ in
+                dragStartYaw = nil
+            }
+    }
+
+    /// ピンチでサイズを変える。開始時サイズに拡大率を掛け、スライダーと同じ範囲に収める。
+    private var sizePinch: some Gesture {
+        MagnificationGesture()
+            .onChanged { scale in
+                let start = pinchStartSize ?? character.defaultSizeMeters
+                pinchStartSize = start
+                character.defaultSizeMeters = min(max(start * Double(scale), 0.12), 1.2)
+            }
+            .onEnded { _ in
+                pinchStartSize = nil
+            }
+    }
+
+    /// yawを-180〜180度に正規化し、回し続けても破綻しないようにする。
+    private func wrappedYaw(_ degrees: Double) -> Double {
+        var value = degrees.truncatingRemainder(dividingBy: 360)
+        if value > 180 {
+            value -= 360
+        } else if value < -180 {
+            value += 360
+        }
+        return value
     }
 
     private func resetAdjustments() {
