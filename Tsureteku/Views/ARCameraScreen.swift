@@ -41,6 +41,10 @@ struct ARCameraScreen: View {
     @State private var captureFlashOpacity = 0.0
     @State private var statusMessage: String?
     @State private var selectedPlacementName: String?
+    /// シーンに推しがまだ1体も置かれていないか。配置ヒントの表示判定に使う。
+    @State private var isSceneEmpty = true
+    /// Apple標準の平面検出コーチングが表示中か。表示中は配置ヒントを出さない。
+    @State private var isCoachingActive = false
     @State private var capturedPhoto: CapturedARPhoto?
     @State private var isControlPanelExpanded = false
 
@@ -118,6 +122,8 @@ struct ARCameraScreen: View {
                 removeSelectedTrigger: $removeSelectedTrigger,
                 clearPlacementSelectionTrigger: $clearPlacementSelectionTrigger,
                 selectedPlacementName: $selectedPlacementName,
+                isSceneEmpty: $isSceneEmpty,
+                isCoachingActive: $isCoachingActive,
                 onCapture: handleCapture,
                 onStatus: showStatus
             )
@@ -142,11 +148,41 @@ struct ARCameraScreen: View {
                         welcomeCard
                         Spacer()
                     } else {
+                        if shouldShowPlacementHint {
+                            placementHint
+                        }
                         bottomControls
                     }
                 }
             }
+            .animation(.easeInOut(duration: 0.3), value: isSceneEmpty)
+            .animation(.easeInOut(duration: 0.3), value: isCoachingActive)
         }
+    }
+
+    /// 配置がまだ無く、平面検出コーチングも出ていない通常モードのときだけ、
+    /// 「タップで置ける」ことを伝えるヒントを表示する。最初の配置で自動的に消える。
+    private var shouldShowPlacementHint: Bool {
+        isSceneEmpty && !isCoachingActive && !isSelfieMode
+    }
+
+    /// タップ配置が隠れジェスチャーにならないよう、置き方を促すヒント。
+    private var placementHint: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "hand.tap.fill")
+                .font(.headline)
+                .symbolEffect(.bounce, options: .repeating)
+
+            Text("床や机をタップして推しを置こう")
+                .font(.subheadline.weight(.semibold))
+        }
+        .foregroundStyle(.white)
+        .padding(.horizontal, 18)
+        .padding(.vertical, 12)
+        .background(LinearGradient.brand, in: Capsule())
+        .shadow(color: BrandColor.purple.opacity(0.35), radius: 12, y: 4)
+        .padding(.bottom, 8)
+        .transition(.move(edge: .bottom).combined(with: .opacity))
     }
 
     private var arHeader: some View {

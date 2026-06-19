@@ -38,6 +38,10 @@ struct ARCharacterView: UIViewRepresentable {
     @Binding var removeSelectedTrigger: Int
     @Binding var clearPlacementSelectionTrigger: Int
     @Binding var selectedPlacementName: String?
+    /// シーン上に推しが1体も置かれていないか。配置ヒントの表示判定に使う。
+    @Binding var isSceneEmpty: Bool
+    /// Apple標準の平面検出コーチングが表示中か。表示中は配置ヒントを出さない。
+    @Binding var isCoachingActive: Bool
     var onCapture: (Result<UIImage, Error>) -> Void
     var onStatus: (String) -> Void
 
@@ -45,6 +49,8 @@ struct ARCharacterView: UIViewRepresentable {
         Coordinator(
             selectedAsset: selectedAsset,
             selectedPlacementName: $selectedPlacementName,
+            isSceneEmpty: $isSceneEmpty,
+            isCoachingActive: $isCoachingActive,
             onCapture: onCapture,
             onStatus: onStatus
         )
@@ -62,6 +68,8 @@ struct ARCharacterView: UIViewRepresentable {
         context.coordinator.onCapture = onCapture
         context.coordinator.onStatus = onStatus
         context.coordinator.selectedPlacementName = $selectedPlacementName
+        context.coordinator.isSceneEmpty = $isSceneEmpty
+        context.coordinator.isCoachingActive = $isCoachingActive
         context.coordinator.updateSelfieMode(isSelfieMode, in: arView)
 
         if captureTrigger != context.coordinator.lastCaptureTrigger {
@@ -149,7 +157,7 @@ struct ARCharacterView: UIViewRepresentable {
         arView.session.pause()
     }
 
-    final class Coordinator: NSObject {
+    final class Coordinator: NSObject, ARCoachingOverlayViewDelegate {
         var selectedAsset: CharacterARAsset?
         var lastCaptureTrigger = 0
         var lastRemoveLastTrigger = 0
@@ -164,8 +172,18 @@ struct ARCharacterView: UIViewRepresentable {
         var onCapture: (Result<UIImage, Error>) -> Void
         var onStatus: (String) -> Void
         var selectedPlacementName: Binding<String?>
+        var isSceneEmpty: Binding<Bool>
+        var isCoachingActive: Binding<Bool>
         var isSelfieMode = false
-        private var placements: [PlacedCharacter] = []
+        private var placements: [PlacedCharacter] = [] {
+            didSet {
+                // 配置の有無が変わったときだけ SwiftUI 側へ通知し、ヒント表示を更新する。
+                let empty = placements.isEmpty
+                if empty != isSceneEmpty.wrappedValue {
+                    isSceneEmpty.wrappedValue = empty
+                }
+            }
+        }
         private var selectedPlacementID: UUID?
         /// 推しの配置（特に3Dモデルの非同期ロード）中は true。連打による多重配置を防ぐ。
         private var isPlacing = false
@@ -178,11 +196,15 @@ struct ARCharacterView: UIViewRepresentable {
         init(
             selectedAsset: CharacterARAsset?,
             selectedPlacementName: Binding<String?>,
+            isSceneEmpty: Binding<Bool>,
+            isCoachingActive: Binding<Bool>,
             onCapture: @escaping (Result<UIImage, Error>) -> Void,
             onStatus: @escaping (String) -> Void
         ) {
             self.selectedAsset = selectedAsset
             self.selectedPlacementName = selectedPlacementName
+            self.isSceneEmpty = isSceneEmpty
+            self.isCoachingActive = isCoachingActive
             self.onCapture = onCapture
             self.onStatus = onStatus
         }
@@ -200,6 +222,7 @@ struct ARCharacterView: UIViewRepresentable {
             coachingOverlay.session = arView.session
             coachingOverlay.goal = .anyPlane
             coachingOverlay.activatesAutomatically = true
+            coachingOverlay.delegate = self
             coachingOverlay.translatesAutoresizingMaskIntoConstraints = false
             arView.addSubview(coachingOverlay)
 
@@ -216,6 +239,16 @@ struct ARCharacterView: UIViewRepresentable {
             } else {
                 startWorldSession(in: arView)
             }
+        }
+
+        // MARK: - コーチング
+
+        func coachingOverlayViewWillActivate(_ coachingOverlayView: ARCoachingOverlayView) {
+            isCoachingActive.wrappedValue = true
+        }
+
+        func coachingOverlayViewDidDeactivate(_ coachingOverlayView: ARCoachingOverlayView) {
+            isCoachingActive.wrappedValue = false
         }
 
         // MARK: - カメラモード
