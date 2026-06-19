@@ -27,6 +27,8 @@ struct CharacterARAsset: Equatable {
 struct ARCharacterView: UIViewRepresentable {
     var selectedAsset: CharacterARAsset?
     var isSelfieMode: Bool
+    /// 録画中はレティクルが画面収録に写り込まないよう隠すためのフラグ。
+    var isRecording: Bool
     @Binding var captureTrigger: Int
     @Binding var removeLastTrigger: Int
     @Binding var resetTrigger: Int
@@ -70,6 +72,7 @@ struct ARCharacterView: UIViewRepresentable {
         context.coordinator.selectedPlacementName = $selectedPlacementName
         context.coordinator.isSceneEmpty = $isSceneEmpty
         context.coordinator.isCoachingActive = $isCoachingActive
+        context.coordinator.isRecording = isRecording
         context.coordinator.updateSelfieMode(isSelfieMode, in: arView)
 
         if captureTrigger != context.coordinator.lastCaptureTrigger {
@@ -154,6 +157,7 @@ struct ARCharacterView: UIViewRepresentable {
     }
 
     static func dismantleUIView(_ arView: ARView, coordinator: Coordinator) {
+        coordinator.tearDown()
         arView.session.pause()
     }
 
@@ -175,6 +179,14 @@ struct ARCharacterView: UIViewRepresentable {
         var isSceneEmpty: Binding<Bool>
         var isCoachingActive: Binding<Bool>
         var isSelfieMode = false
+        var isRecording = false
+        /// 検出面の中央に出す配置レティクル（吸着リング）とその土台アンカー。
+        private var reticleAnchor: AnchorEntity?
+        private var reticleEntity: Entity?
+        /// 毎フレームのレイキャストでレティクルを更新する購読。
+        private var sceneUpdateSubscription: Cancellable?
+        /// 撮影スナップショットの瞬間だけレティクルを写さないための一時抑制フラグ。
+        private var suppressReticle = false
         private var placements: [PlacedCharacter] = [] {
             didSet {
                 // 配置の有無が変わったときだけ SwiftUI 側へ通知し、ヒント表示を更新する。
@@ -233,6 +245,21 @@ struct ARCharacterView: UIViewRepresentable {
                 coachingOverlay.bottomAnchor.constraint(equalTo: arView.bottomAnchor)
             ])
             self.coachingOverlay = coachingOverlay
+
+            let reticle = makeReticle()
+            let reticleAnchor = AnchorEntity(world: matrix_identity_float4x4)
+            reticleAnchor.addChild(reticle)
+            arView.scene.addAnchor(reticleAnchor)
+            self.reticleAnchor = reticleAnchor
+            self.reticleEntity = reticle
+
+            // 毎フレーム画面中央から平面へレイキャストし、レティクルを吸着させる。
+            sceneUpdateSubscription = arView.scene.subscribe(to: SceneEvents.Update.self) { [weak self, weak arView] _ in
+                guard let self, let arView else {
+                    return
+                }
+                self.updateReticle(in: arView)
+            }
 
             if isSelfieMode {
                 startSelfieSession(in: arView)
@@ -473,6 +500,10 @@ struct ARCharacterView: UIViewRepresentable {
             let wasMarkerEnabled = marker?.isEnabled ?? false
             marker?.isEnabled = false
 
+            // 配置レティクルも写真に写り込まないよう、撮影の間だけ抑制する。
+            suppressReticle = true
+            setReticleVisible(false)
+
             // isEnabled=false の変更が描画へ反映されるのは次のレンダリング更新のため、
             // ここで即 snapshot すると選択枠が写り込むことがある（特にモデル配置直後）。
             // 次の SceneEvents.Update を一度だけ待ってから撮影し、枠が確実に消えた状態を撮る。
@@ -487,6 +518,7 @@ struct ARCharacterView: UIViewRepresentable {
                     guard let self else {
                         return
                     }
+                    self.suppressReticle = false
 
                     guard let image else {
                         self.onCapture(.failure(ARCaptureError.snapshotFailed))
@@ -496,6 +528,85 @@ struct ARCharacterView: UIViewRepresentable {
                     self.onCapture(.success(image))
                 }
             }
+        }
+
+        // MARK: - 配置レティクル
+
+        /// ARView破棄時に毎フレーム購読を止める。
+        func tearDown() {
+            sceneUpdateSubscription?.cancel()
+            sceneUpdateSubscription = nil
+        }
+
+        /// 毎フレーム画面中央から平面へレイキャストし、レティクルを吸着させる。
+        /// 「タップ＝配置」を空間的に示す初回補助なので、配置済み・自撮り・録画中・
+        /// 撮影中・コーチング中・配置処理中は隠す。
+        private func updateReticle(in arView: ARView) {
+            guard !isSelfieMode,
+                  !isRecording,
+                  !suppressReticle,
+                  !isPlacing,
+                  placements.isEmpty,
+                  !isCoachingActive.wrappedValue,
+                  selectedAsset != nil else {
+                setReticleVisible(false)
+                return
+            }
+
+            let center = CGPoint(x: arView.bounds.midX, y: arView.bounds.midY)
+            guard let result = arView.raycast(from: center, allowing: .estimatedPlane, alignment: .any).first else {
+                setReticleVisible(false)
+                return
+            }
+
+            reticleEntity?.setTransformMatrix(result.worldTransform, relativeTo: nil)
+            setReticleVisible(true)
+        }
+
+        private func setReticleVisible(_ visible: Bool) {
+            if reticleEntity?.isEnabled != visible {
+                reticleEntity?.isEnabled = visible
+            }
+        }
+
+        /// 検出面に水平に寝かせる白いリング＋中心点。
+        /// 配置済みの選択リング（makeSelectionMarker）と同じ白で見た目を揃え、
+        /// 「狙い→着地」の連続性を出す。
+        private func makeReticle() -> Entity {
+            let ringColor = UIColor.white
+            var material = UnlitMaterial(color: ringColor.withAlphaComponent(0.9))
+            material.blending = .transparent(opacity: 0.9)
+            material.faceCulling = .none
+
+            let reticle = Entity()
+            reticle.name = "placement-reticle"
+            reticle.isEnabled = false
+
+            let radius: Float = 0.09
+            let lineThickness: Float = 0.012
+            let lineHeight: Float = 0.004
+            let segmentCount = 48
+            // 隣り合うセグメントを少し重ねて、継ぎ目のない滑らかなリングにする。
+            let segmentLength = (2 * .pi * radius) / Float(segmentCount) * 1.2
+
+            for index in 0..<segmentCount {
+                let angle = (2 * .pi) * Float(index) / Float(segmentCount)
+                let segment = ModelEntity(
+                    mesh: .generateBox(width: segmentLength, height: lineHeight, depth: lineThickness),
+                    materials: [material]
+                )
+                segment.position = [radius * cos(angle), 0, radius * sin(angle)]
+                // ボックスの長辺を円の接線方向に向ける。
+                segment.orientation = simd_quatf(angle: -(angle + .pi / 2), axis: [0, 1, 0])
+                reticle.addChild(segment)
+            }
+
+            // 中心点（平らな円盤）で正確な着地位置を示す。
+            let dot = ModelEntity(mesh: .generateSphere(radius: 0.5), materials: [material])
+            dot.scale = [radius * 0.3, lineHeight, radius * 0.3]
+            reticle.addChild(dot)
+
+            return reticle
         }
 
         private func place(

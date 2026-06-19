@@ -111,6 +111,7 @@ struct ARCameraScreen: View {
             ARCharacterView(
                 selectedAsset: selectedAsset,
                 isSelfieMode: isSelfieMode,
+                isRecording: isRecording,
                 captureTrigger: $captureTrigger,
                 removeLastTrigger: $removeLastTrigger,
                 resetTrigger: $resetTrigger,
