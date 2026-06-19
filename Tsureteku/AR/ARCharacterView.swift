@@ -199,7 +199,7 @@ struct ARCharacterView: UIViewRepresentable {
         private var selectedPlacementID: UUID?
         /// 推しの配置（特に3Dモデルの非同期ロード）中は true。連打による多重配置を防ぐ。
         private var isPlacing = false
-        private var placementCancellable: Cancellable?
+        private var placementTask: Task<Void, Never>?
         private weak var coachingOverlay: ARCoachingOverlayView?
         private var selfieAssetID: UUID?
         private var selfieSize: Float?
@@ -536,6 +536,8 @@ struct ARCharacterView: UIViewRepresentable {
         func tearDown() {
             sceneUpdateSubscription?.cancel()
             sceneUpdateSubscription = nil
+            placementTask?.cancel()
+            placementTask = nil
         }
 
         /// 毎フレーム画面中央から平面へレイキャストし、レティクルを吸着させる。
@@ -778,22 +780,26 @@ struct ARCharacterView: UIViewRepresentable {
                 return
             }
 
-            // 同期 loadModel はメインスレッドを固め、その間に溜まったタップで多重配置が起きていた。
-            // 非同期ロードに切り替え、ロード中は isPlacing ガードで追加タップを無視する。
-            placementCancellable = ModelEntity.loadModelAsync(contentsOf: modelURL, withName: asset.id.uuidString)
-                .sink(receiveCompletion: { [weak self] result in
-                    if case .failure(let error) = result {
-                        self?.placementCancellable = nil
-                        completion(.failure(error))
-                    }
-                }, receiveValue: { [weak self] entity in
-                    guard let self else {
+            // 同期ロードはメインスレッドを固めるため、ロード中は isPlacing ガードで追加タップを無視する。
+            placementTask = Task { [weak self] in
+                do {
+                    let entity = try await ModelEntity(contentsOf: modelURL, withName: asset.id.uuidString)
+                    guard !Task.isCancelled, let self else {
                         return
                     }
-                    self.placementCancellable = nil
+
+                    self.placementTask = nil
                     let placement = self.assemblePlacement(entity, asset: asset, at: result, in: arView)
                     completion(.success(placement))
-                })
+                } catch {
+                    guard !Task.isCancelled else {
+                        return
+                    }
+
+                    self?.placementTask = nil
+                    completion(.failure(error))
+                }
+            }
         }
 
         /// ロード済みの ModelEntity を整え、シーンへ配置して PlacedCharacter を返す。
@@ -948,7 +954,7 @@ struct ARCharacterView: UIViewRepresentable {
                 return try TextureResource.load(contentsOf: url, withName: name, options: options)
             }
 
-            return try TextureResource.generate(from: adjusted, options: options)
+            return try TextureResource(image: adjusted, withName: name, options: options)
         }
 
         private func makeContactShadow(width: Float, depth: Float, baseY: Float) -> ModelEntity {
