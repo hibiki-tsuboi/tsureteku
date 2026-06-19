@@ -539,14 +539,13 @@ struct ARCharacterView: UIViewRepresentable {
         }
 
         /// 毎フレーム画面中央から平面へレイキャストし、レティクルを吸着させる。
-        /// 「タップ＝配置」を空間的に示す初回補助なので、配置済み・自撮り・録画中・
-        /// 撮影中・コーチング中・配置処理中は隠す。
+        /// 着地点を常に示すため毎回の配置で表示し、自撮り・録画中・撮影中・
+        /// コーチング中・配置処理中だけ隠す（写真・動画には写さない）。
         private func updateReticle(in arView: ARView) {
             guard !isSelfieMode,
                   !isRecording,
                   !suppressReticle,
                   !isPlacing,
-                  placements.isEmpty,
                   !isCoachingActive.wrappedValue,
                   selectedAsset != nil else {
                 setReticleVisible(false)
