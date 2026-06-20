@@ -41,16 +41,6 @@ struct CapturedPhotoPreviewView: View {
             }
             .navigationTitle("撮影プレビュー")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button {
-                        dismiss()
-                    } label: {
-                        Image(systemName: "xmark")
-                    }
-                    .accessibilityLabel("閉じる")
-                }
-            }
             .toolbarColorScheme(.dark, for: .navigationBar)
             .toolbarBackground(.visible, for: .navigationBar)
             .sheet(isPresented: $isShareSheetPresented) {
