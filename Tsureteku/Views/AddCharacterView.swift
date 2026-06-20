@@ -64,22 +64,26 @@ struct AddCharacterView: View {
 
                 if cutoutImage != nil {
                     Section {
-                        HStack {
-                            Text("境界")
+                        VStack(alignment: .leading, spacing: 4) {
+                            HStack {
+                                Text("切り抜きの強さ")
+                                Spacer()
+                                Text(alphaThreshold, format: .percent.precision(.fractionLength(0)))
+                                    .font(.caption.monospacedDigit())
+                                    .foregroundStyle(.secondary)
+                            }
                             Slider(value: $alphaThreshold, in: 0...0.45)
-                            Text(alphaThreshold, format: .percent.precision(.fractionLength(0)))
-                                .font(.caption.monospacedDigit())
-                                .foregroundStyle(.secondary)
-                                .frame(width: 42, alignment: .trailing)
                         }
 
-                        HStack {
-                            Text("余白")
+                        VStack(alignment: .leading, spacing: 4) {
+                            HStack {
+                                Text("まわりの余白")
+                                Spacer()
+                                Text(trimPadding, format: .percent.precision(.fractionLength(0)))
+                                    .font(.caption.monospacedDigit())
+                                    .foregroundStyle(.secondary)
+                            }
                             Slider(value: $trimPadding, in: 0...0.18)
-                            Text(trimPadding, format: .percent.precision(.fractionLength(0)))
-                                .font(.caption.monospacedDigit())
-                                .foregroundStyle(.secondary)
-                                .frame(width: 42, alignment: .trailing)
                         }
 
                         Button {
@@ -91,7 +95,7 @@ struct AddCharacterView: View {
                     } header: {
                         Text("切り抜き")
                     } footer: {
-                        Text("「境界」「余白」を動かすと、切り抜き範囲がすぐに変わります。")
+                        Text("「切り抜きの強さ」「まわりの余白」を動かすと、切り抜き範囲がすぐに変わります。")
                     }
 
                     Section("AR") {

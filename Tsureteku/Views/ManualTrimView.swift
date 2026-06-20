@@ -14,34 +14,54 @@ struct ManualTrimView: View {
     let image: UIImage
     var onSave: (UIImage) -> Void
 
-    @State private var leadingTrim = 0.0
-    @State private var trailingTrim = 0.0
-    @State private var topTrim = 0.0
-    @State private var bottomTrim = 0.0
+    /// 画像に対する正規化座標 [0,1] の切り抜き範囲。
+    @State private var cropRect = CGRect(x: 0, y: 0, width: 1, height: 1)
+    /// ドラッグ開始時の範囲。translation を始点に足して算出するため保持する。
+    @State private var dragStartRect: CGRect?
+
+    /// 切り抜き範囲の最小サイズ（画像比）。
+    private let minSize: CGFloat = 0.1
+
+    private enum Corner {
+        case topLeading, topTrailing, bottomLeading, bottomTrailing
+    }
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 0) {
-                preview
-                    .padding()
+            VStack(spacing: 16) {
+                GeometryReader { geometry in
+                    let displayRect = aspectFitRect(imageSize: image.size, in: geometry.size)
 
-                Form {
-                    trimSlider("左", value: $leadingTrim)
-                    trimSlider("右", value: $trailingTrim)
-                    trimSlider("上", value: $topTrim)
-                    trimSlider("下", value: $bottomTrim)
+                    ZStack {
+                        Image(uiImage: image)
+                            .resizable()
+                            .scaledToFit()
+
+                        cropOverlay(displayRect: displayRect)
+                    }
+                    .frame(width: geometry.size.width, height: geometry.size.height)
+                }
+                .padding()
+
+                VStack(spacing: 12) {
+                    Text("枠の角をドラッグして、切り抜く範囲を決めます。枠の中をドラッグすると移動できます。")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
 
                     Button {
-                        leadingTrim = 0
-                        trailingTrim = 0
-                        topTrim = 0
-                        bottomTrim = 0
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            cropRect = CGRect(x: 0, y: 0, width: 1, height: 1)
+                        }
                     } label: {
                         Label("リセット", systemImage: "arrow.counterclockwise")
                     }
+                    .buttonStyle(.bordered)
                 }
-                .scrollContentBackground(.hidden)
+                .padding(.horizontal)
+                .padding(.bottom)
             }
+            .background(Color(.systemGroupedBackground))
             .navigationTitle("トリミング")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -60,51 +80,167 @@ struct ManualTrimView: View {
         }
     }
 
-    private var preview: some View {
+    // MARK: - Overlay
+
+    @ViewBuilder
+    private func cropOverlay(displayRect: CGRect) -> some View {
+        let frame = cropFrameRect(in: displayRect)
+
+        // 範囲外を暗くし、切り抜き範囲だけ明るく見せる。
         ZStack {
-            RoundedRectangle(cornerRadius: 8)
-                .fill(.thinMaterial)
+            Rectangle()
+                .fill(Color.black.opacity(0.45))
+                .frame(width: displayRect.width, height: displayRect.height)
+                .position(x: displayRect.midX, y: displayRect.midY)
 
-            Image(uiImage: previewImage)
-                .resizable()
-                .scaledToFit()
-                .padding(16)
+            Rectangle()
+                .frame(width: frame.width, height: frame.height)
+                .position(x: frame.midX, y: frame.midY)
+                .blendMode(.destinationOut)
         }
-        .frame(maxWidth: .infinity)
-        .frame(height: 320)
+        .compositingGroup()
+        .allowsHitTesting(false)
+
+        // 枠の中をドラッグして移動。
+        Color.clear
+            .frame(width: frame.width, height: frame.height)
+            .contentShape(Rectangle())
+            .position(x: frame.midX, y: frame.midY)
+            .gesture(moveGesture(displayRect: displayRect))
+
+        // 枠線。
+        Rectangle()
+            .strokeBorder(Color.white, lineWidth: 2)
+            .frame(width: frame.width, height: frame.height)
+            .position(x: frame.midX, y: frame.midY)
+            .allowsHitTesting(false)
+
+        // 四隅のハンドル。
+        handle(.topLeading, displayRect: displayRect)
+        handle(.topTrailing, displayRect: displayRect)
+        handle(.bottomLeading, displayRect: displayRect)
+        handle(.bottomTrailing, displayRect: displayRect)
     }
 
-    private var previewImage: UIImage {
-        ImageCropService.crop(image, normalizedRect: cropRect) ?? image
+    private func handle(_ corner: Corner, displayRect: CGRect) -> some View {
+        let frame = cropFrameRect(in: displayRect)
+        let point: CGPoint
+        switch corner {
+        case .topLeading:
+            point = CGPoint(x: frame.minX, y: frame.minY)
+        case .topTrailing:
+            point = CGPoint(x: frame.maxX, y: frame.minY)
+        case .bottomLeading:
+            point = CGPoint(x: frame.minX, y: frame.maxY)
+        case .bottomTrailing:
+            point = CGPoint(x: frame.maxX, y: frame.maxY)
+        }
+
+        return ZStack {
+            Circle().fill(.white)
+            Circle().strokeBorder(Color.accentColor, lineWidth: 2)
+        }
+        .frame(width: 22, height: 22)
+        .shadow(color: .black.opacity(0.3), radius: 2)
+        .frame(width: 44, height: 44)
+        .contentShape(Rectangle())
+        .position(point)
+        .gesture(cornerGesture(corner, displayRect: displayRect))
     }
 
-    private var cropRect: CGRect {
-        let maxHorizontalTrim = min(0.9, leadingTrim + trailingTrim)
-        let maxVerticalTrim = min(0.9, topTrim + bottomTrim)
+    // MARK: - Gestures
 
-        let adjustedTrailing = maxHorizontalTrim >= 0.9 ? 0.9 - leadingTrim : trailingTrim
-        let adjustedBottom = maxVerticalTrim >= 0.9 ? 0.9 - topTrim : bottomTrim
+    private func moveGesture(displayRect: CGRect) -> some Gesture {
+        DragGesture()
+            .onChanged { value in
+                if dragStartRect == nil {
+                    dragStartRect = cropRect
+                }
+                guard let start = dragStartRect else { return }
+                moveCrop(translation: value.translation, start: start, displayRect: displayRect)
+            }
+            .onEnded { _ in
+                dragStartRect = nil
+            }
+    }
 
+    private func cornerGesture(_ corner: Corner, displayRect: CGRect) -> some Gesture {
+        DragGesture()
+            .onChanged { value in
+                if dragStartRect == nil {
+                    dragStartRect = cropRect
+                }
+                guard let start = dragStartRect else { return }
+                resizeCorner(corner, translation: value.translation, start: start, displayRect: displayRect)
+            }
+            .onEnded { _ in
+                dragStartRect = nil
+            }
+    }
+
+    private func moveCrop(translation: CGSize, start: CGRect, displayRect: CGRect) {
+        let dx = displayRect.width > 0 ? translation.width / displayRect.width : 0
+        let dy = displayRect.height > 0 ? translation.height / displayRect.height : 0
+
+        let newMinX = min(max(0, start.minX + dx), 1 - start.width)
+        let newMinY = min(max(0, start.minY + dy), 1 - start.height)
+        cropRect = CGRect(x: newMinX, y: newMinY, width: start.width, height: start.height)
+    }
+
+    private func resizeCorner(_ corner: Corner, translation: CGSize, start: CGRect, displayRect: CGRect) {
+        let dx = displayRect.width > 0 ? translation.width / displayRect.width : 0
+        let dy = displayRect.height > 0 ? translation.height / displayRect.height : 0
+
+        var minX = start.minX
+        var minY = start.minY
+        var maxX = start.maxX
+        var maxY = start.maxY
+
+        switch corner {
+        case .topLeading:
+            minX = max(0, min(start.minX + dx, start.maxX - minSize))
+            minY = max(0, min(start.minY + dy, start.maxY - minSize))
+        case .topTrailing:
+            maxX = min(1, max(start.maxX + dx, start.minX + minSize))
+            minY = max(0, min(start.minY + dy, start.maxY - minSize))
+        case .bottomLeading:
+            minX = max(0, min(start.minX + dx, start.maxX - minSize))
+            maxY = min(1, max(start.maxY + dy, start.minY + minSize))
+        case .bottomTrailing:
+            maxX = min(1, max(start.maxX + dx, start.minX + minSize))
+            maxY = min(1, max(start.maxY + dy, start.minY + minSize))
+        }
+
+        cropRect = CGRect(x: minX, y: minY, width: maxX - minX, height: maxY - minY)
+    }
+
+    // MARK: - Geometry
+
+    /// 画像をコンテナ内にアスペクト維持で収めたときの表示矩形（scaledToFit と一致）。
+    private func aspectFitRect(imageSize: CGSize, in container: CGSize) -> CGRect {
+        guard imageSize.width > 0, imageSize.height > 0 else {
+            return CGRect(origin: .zero, size: container)
+        }
+
+        let scale = min(container.width / imageSize.width, container.height / imageSize.height)
+        let width = imageSize.width * scale
+        let height = imageSize.height * scale
         return CGRect(
-            x: leadingTrim,
-            y: topTrim,
-            width: max(0.1, 1 - leadingTrim - adjustedTrailing),
-            height: max(0.1, 1 - topTrim - adjustedBottom)
+            x: (container.width - width) / 2,
+            y: (container.height - height) / 2,
+            width: width,
+            height: height
         )
     }
 
-    private func trimSlider(_ title: String, value: Binding<Double>) -> some View {
-        HStack {
-            Text(title)
-                .frame(width: 28, alignment: .leading)
-
-            Slider(value: value, in: 0...0.45)
-
-            Text(value.wrappedValue, format: .percent.precision(.fractionLength(0)))
-                .font(.caption.monospacedDigit())
-                .foregroundStyle(.secondary)
-                .frame(width: 42, alignment: .trailing)
-        }
+    /// 正規化された cropRect を、表示矩形内のビュー座標へ変換する。
+    private func cropFrameRect(in displayRect: CGRect) -> CGRect {
+        CGRect(
+            x: displayRect.minX + cropRect.minX * displayRect.width,
+            y: displayRect.minY + cropRect.minY * displayRect.height,
+            width: cropRect.width * displayRect.width,
+            height: cropRect.height * displayRect.height
+        )
     }
 
     private func applyCrop() {

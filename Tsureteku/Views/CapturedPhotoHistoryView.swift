@@ -13,10 +13,13 @@ import UIKit
 
 struct CapturedPhotoHistoryView: View {
     @Query(sort: \CapturedPhoto.createdAt, order: .reverse) private var photos: [CapturedPhoto]
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
-    private let columns = [
-        GridItem(.adaptive(minimum: 150), spacing: 12)
-    ]
+    private var columns: [GridItem] {
+        // iPad（regular幅）では1セルが小さくなりすぎないよう最小幅を広げる。
+        let minimum: CGFloat = horizontalSizeClass == .regular ? 200 : 150
+        return [GridItem(.adaptive(minimum: minimum), spacing: 12)]
+    }
 
     var body: some View {
         NavigationStack {
