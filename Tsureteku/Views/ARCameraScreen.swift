@@ -34,8 +34,8 @@ struct ARCameraScreen: View {
     @State private var isResetConfirmationPresented = false
     @State private var isSelfieMode = false
     @State private var isRecording = false
-    /// 録画開始時刻。HUDの経過時間表示に使う。
-    @State private var recordingStartDate: Date?
+    @State private var isRecordingReadyToStop = false
+    @State private var isStoppingRecording = false
     @State private var recordingPreview: RecordingPreviewItem?
     @State private var captureFlashOpacity = 0.0
     @State private var statusMessage: String?
@@ -73,7 +73,11 @@ struct ARCameraScreen: View {
             }
         }
         .fullScreenCover(item: $recordingPreview) { item in
-            RecordingPreview(previewController: item.controller) {
+            CapturedVideoPreviewView(videoURL: item.url, onSave: saveRecordedVideo) { result in
+                handleVideoPreviewSave(result)
+            }
+            .onDisappear {
+                deleteTemporaryRecording(at: item.url)
                 recordingPreview = nil
             }
         }
@@ -135,12 +139,8 @@ struct ARCameraScreen: View {
                 .ignoresSafeArea()
                 .allowsHitTesting(false)
 
-            // ReplayKitは画面全体をそのまま録画するため、録画中はAR被写体に重なる
-            // 操作系を出さず、写り込みを最小化した上部HUDだけにする。
             VStack(spacing: 0) {
                 if isRecording {
-                    recordingIndicator
-                    Spacer()
                     recordingStopControl
                 } else {
                     arHeader
@@ -377,47 +377,20 @@ struct ARCameraScreen: View {
         .accessibilityLabel("動画を撮影")
     }
 
-    /// 録画中に画面上部・中央へ出す経過時間インジケータ。停止操作は下中央の
-    /// recordingStopControl にまとめ、上部は録画動画への写り込みを抑えた最小表示にする。
-    private var recordingIndicator: some View {
-        HStack(spacing: 6) {
-            Circle()
-                .fill(.red)
-                .frame(width: 9, height: 9)
-
-            if let recordingStartDate {
-                Text(timerInterval: recordingStartDate...Date.distantFuture, countsDown: false)
-                    .font(.callout.weight(.semibold).monospacedDigit())
-            } else {
-                Text("録画中")
-                    .font(.callout.weight(.semibold))
-            }
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 7)
-        .background(.ultraThinMaterial, in: Capsule())
-        .padding(.top, 12)
-    }
-
-    /// 録画停止ボタン。録画開始ボタンと指の位置がずれないよう、撮影系と同じ
-    /// 下中央に置く。シャッターと同サイズのリングに赤い停止マークを重ねる。
+    /// ReplayKitは画面全体を録画するため、録画中は可視UIを出さず透明な停止領域だけを置く。
     private var recordingStopControl: some View {
         Button {
-            stopRecording()
+            stopRecordingIfReady()
         } label: {
-            ZStack {
-                Circle()
-                    .stroke(.white.opacity(0.85), lineWidth: 4)
-                    .frame(width: 78, height: 78)
-
-                RoundedRectangle(cornerRadius: 6)
-                    .fill(.red)
-                    .frame(width: 30, height: 30)
-            }
+            Color.clear
+                .contentShape(Rectangle())
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .ignoresSafeArea()
         }
         .buttonStyle(.plain)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .accessibilityLabel("録画を停止")
-        .padding(.bottom, 12)
+        .disabled(!isRecordingReadyToStop || isStoppingRecording)
     }
 
     /// 推し情報・選択・サイズを1枚にまとめたパネル。
@@ -719,6 +692,10 @@ struct ARCameraScreen: View {
     }
 
     private func startRecording() {
+        guard !isRecording, !isStoppingRecording else {
+            return
+        }
+
         let recorder = RPScreenRecorder.shared()
 
         guard recorder.isAvailable else {
@@ -726,43 +703,76 @@ struct ARCameraScreen: View {
             return
         }
 
+        isRecordingReadyToStop = false
+        withAnimation(.easeInOut(duration: 0.2)) {
+            isRecording = true
+        }
+
         recorder.isMicrophoneEnabled = true
         recorder.startRecording { error in
             DispatchQueue.main.async {
                 if let error {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        isRecording = false
+                    }
+                    isRecordingReadyToStop = false
                     showStatus(error.localizedDescription)
                     return
                 }
 
                 UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-                recordingStartDate = Date()
-                withAnimation(.easeInOut(duration: 0.2)) {
-                    isRecording = true
-                }
+                isRecordingReadyToStop = true
             }
         }
     }
 
+    private func stopRecordingIfReady() {
+        guard isRecordingReadyToStop, !isStoppingRecording else {
+            return
+        }
+
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        stopRecording()
+    }
+
     private func stopRecording() {
-        RPScreenRecorder.shared().stopRecording { previewController, error in
+        isStoppingRecording = true
+        isRecordingReadyToStop = false
+
+        let outputURL = temporaryRecordingURL()
+        try? FileManager.default.removeItem(at: outputURL)
+
+        RPScreenRecorder.shared().stopRecording(withOutput: outputURL) { error in
             DispatchQueue.main.async {
-                recordingStartDate = nil
+                isStoppingRecording = false
                 withAnimation(.easeInOut(duration: 0.2)) {
                     isRecording = false
                 }
 
                 if let error {
+                    deleteTemporaryRecording(at: outputURL)
                     showStatus(error.localizedDescription)
                     return
                 }
 
-                if let previewController {
-                    recordingPreview = RecordingPreviewItem(controller: previewController)
-                } else {
+                guard FileManager.default.fileExists(atPath: outputURL.path) else {
                     showStatus("動画を保存できませんでした。")
+                    return
                 }
+
+                recordingPreview = RecordingPreviewItem(url: outputURL)
             }
         }
+    }
+
+    private func temporaryRecordingURL() -> URL {
+        FileManager.default.temporaryDirectory
+            .appendingPathComponent("tsureteku-recording-\(UUID().uuidString)")
+            .appendingPathExtension("mp4")
+    }
+
+    private func deleteTemporaryRecording(at url: URL) {
+        try? FileManager.default.removeItem(at: url)
     }
 
     /// 撮影時に触覚・シャッター音・一瞬の白フラッシュで「撮れた」手応えを返す。
@@ -802,6 +812,15 @@ struct ARCameraScreen: View {
         }
     }
 
+    private func handleVideoPreviewSave(_ result: Result<Void, Error>) {
+        switch result {
+        case .success:
+            showStatus("動画に保存しました。")
+        case .failure(let error):
+            showStatus(error.localizedDescription)
+        }
+    }
+
     private func saveCapturedPhoto(_ image: UIImage, completion: @escaping (Result<Void, Error>) -> Void) {
         PhotoLibrarySaver.save(image) { result in
             switch result {
@@ -820,6 +839,10 @@ struct ARCameraScreen: View {
                 completion(.failure(error))
             }
         }
+    }
+
+    private func saveRecordedVideo(_ url: URL, completion: @escaping (Result<Void, Error>) -> Void) {
+        PhotoLibrarySaver.saveVideo(at: url, completion: completion)
     }
 
     private func showStatus(_ message: String) {
@@ -845,36 +868,7 @@ private struct CapturedARPhoto: Identifiable {
 
 private struct RecordingPreviewItem: Identifiable {
     let id = UUID()
-    let controller: RPPreviewViewController
-}
-
-/// ReplayKitの録画プレビュー（保存・共有）を表示するラッパー。
-private struct RecordingPreview: UIViewControllerRepresentable {
-    let previewController: RPPreviewViewController
-    let onFinish: () -> Void
-
-    func makeCoordinator() -> Coordinator {
-        Coordinator(onFinish: onFinish)
-    }
-
-    func makeUIViewController(context: Context) -> RPPreviewViewController {
-        previewController.previewControllerDelegate = context.coordinator
-        return previewController
-    }
-
-    func updateUIViewController(_ uiViewController: RPPreviewViewController, context: Context) {}
-
-    final class Coordinator: NSObject, RPPreviewViewControllerDelegate {
-        private let onFinish: () -> Void
-
-        init(onFinish: @escaping () -> Void) {
-            self.onFinish = onFinish
-        }
-
-        func previewControllerDidFinish(_ previewController: RPPreviewViewController) {
-            onFinish()
-        }
-    }
+    let url: URL
 }
 
 #Preview {
