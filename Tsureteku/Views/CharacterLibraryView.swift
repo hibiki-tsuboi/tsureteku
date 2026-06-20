@@ -13,7 +13,6 @@ struct CharacterLibraryView: View {
     @Query(sort: \ToyCharacter.createdAt, order: .reverse) private var characters: [ToyCharacter]
 
     @State private var isAddingCharacter = false
-    @State private var characterToDelete: ToyCharacter?
 
     var body: some View {
         NavigationStack {
@@ -31,7 +30,7 @@ struct CharacterLibraryView: View {
                                 }
                                 .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                                     Button(role: .destructive) {
-                                        characterToDelete = character
+                                        delete(character)
                                     } label: {
                                         Label("削除", systemImage: "trash")
                                     }
@@ -62,25 +61,6 @@ struct CharacterLibraryView: View {
             }
             .sheet(isPresented: $isAddingCharacter) {
                 AddCharacterView()
-            }
-            .alert(
-                "この推しを削除しますか？",
-                isPresented: Binding(
-                    get: { characterToDelete != nil },
-                    set: { isPresented in
-                        if !isPresented {
-                            characterToDelete = nil
-                        }
-                    }
-                ),
-                presenting: characterToDelete
-            ) { character in
-                Button("キャンセル", role: .cancel) {}
-                Button("削除", role: .destructive) {
-                    delete(character)
-                }
-            } message: { character in
-                Text(Self.deleteMessage(for: character))
             }
         }
     }
@@ -157,13 +137,6 @@ struct CharacterLibraryView: View {
         }
 
         return "\(year)/\(month)/\(day)"
-    }
-
-    /// 削除確認ダイアログの本文。対象の推し名を示しつつ、履歴の写真・動画は残ることを伝える。
-    private static func deleteMessage(for character: ToyCharacter) -> String {
-        let name = character.name.trimmingCharacters(in: .whitespacesAndNewlines)
-        let subject = name.isEmpty ? "この推し" : "「\(name)」"
-        return "\(subject)と、登録した写真・3Dモデルを削除します。元に戻せません。撮影した写真・動画は履歴に残ります。"
     }
 
     private func delete(_ character: ToyCharacter) {
