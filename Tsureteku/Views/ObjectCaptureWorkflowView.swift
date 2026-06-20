@@ -693,9 +693,13 @@ struct ObjectCaptureWorkflowView: View {
         }
 
         Task {
+            var createdModelFileName: String?
+            var didCommitModel = false
+
             do {
                 let inputURL = try CharacterImageStore.objectCaptureDirectoryURL(for: directoryName)
                 let output = try CharacterImageStore.newModelURL()
+                createdModelFileName = output.fileName
                 isReconstructing = true
                 reconstructionProgress = 0
                 reconstructionStatus = "準備中"
@@ -735,6 +739,7 @@ struct ObjectCaptureWorkflowView: View {
                         if didCompleteModel {
                             CharacterImageStore.deleteModelIfExists(fileName: character.modelFileName)
                             character.modelFileName = output.fileName
+                            didCommitModel = true
                             character.updatedAt = Date()
                             try? modelContext.save()
                         }
@@ -772,6 +777,11 @@ struct ObjectCaptureWorkflowView: View {
                 isReconstructing = false
                 reconstructionFailed = true
                 errorMessage = reconstructionFailureMessage()
+            }
+
+            // 採用しなかった出力USDZ（失敗・キャンセル・モデル未生成）は後始末し、ゴミファイルを残さない。
+            if let createdModelFileName, !didCommitModel {
+                CharacterImageStore.deleteModelIfExists(fileName: createdModelFileName)
             }
         }
     }
