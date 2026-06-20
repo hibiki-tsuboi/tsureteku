@@ -37,6 +37,8 @@ struct ARCameraScreen: View {
     @State private var isRecording = false
     @State private var isRecordingReadyToStop = false
     @State private var isStoppingRecording = false
+    /// 録画確認後〜実際の録画開始までの準備中フラグ。この間も操作UIを隠し、誤操作を防ぐ。
+    @State private var isPreparingRecording = false
     @State private var recordingPreview: RecordingPreviewItem?
     @State private var captureFlashOpacity = 0.0
     @State private var statusMessage: String?
@@ -148,7 +150,7 @@ struct ARCameraScreen: View {
                 .allowsHitTesting(false)
 
             VStack(spacing: 0) {
-                if isRecording {
+                if isRecording || isPreparingRecording {
                     recordingStopControl
                 } else {
                     arHeader
@@ -700,6 +702,9 @@ struct ARCameraScreen: View {
     }
 
     private func startRecordingAfterConfirmation() {
+        // 確認直後に準備中フラグを立てて操作UIを隠す。ここで隠さないと、録画開始までの
+        // 待機中にシャッター等を押せてしまい、録画とプレビューが競合する。
+        isPreparingRecording = true
         Task {
             try? await Task.sleep(for: .milliseconds(320))
             startRecording()
@@ -708,12 +713,14 @@ struct ARCameraScreen: View {
 
     private func startRecording() {
         guard !isRecording, !isStoppingRecording else {
+            isPreparingRecording = false
             return
         }
 
         let recorder = RPScreenRecorder.shared()
 
         guard recorder.isAvailable else {
+            isPreparingRecording = false
             showStatus("この端末では画面収録を利用できません。")
             return
         }
@@ -722,6 +729,7 @@ struct ARCameraScreen: View {
         withAnimation(.easeInOut(duration: 0.2)) {
             isRecording = true
         }
+        isPreparingRecording = false
 
         recorder.isMicrophoneEnabled = true
         recorder.startRecording { error in
