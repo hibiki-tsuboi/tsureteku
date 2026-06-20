@@ -594,11 +594,11 @@ struct ARCameraScreen: View {
                     scaleUpTrigger += 1
                 }
 
-                placementToolButton(systemImage: "rotate.left", accessibilityLabel: "選択中の推しを左に回転") {
+                placementToolButton(systemImage: "arrow.counterclockwise.circle", accessibilityLabel: "選択中の推しを左に回転") {
                     rotateLeftTrigger += 1
                 }
 
-                placementToolButton(systemImage: "rotate.right", accessibilityLabel: "選択中の推しを右に回転") {
+                placementToolButton(systemImage: "arrow.clockwise.circle", accessibilityLabel: "選択中の推しを右に回転") {
                     rotateRightTrigger += 1
                 }
 
