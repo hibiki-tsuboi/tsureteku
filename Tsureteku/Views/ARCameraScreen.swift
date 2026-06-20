@@ -95,15 +95,14 @@ struct ARCameraScreen: View {
         } message: {
             Text("この端末はARに対応していないため、AR撮影は利用できません。")
         }
-        .confirmationDialog(
+        .alert(
             "配置をリセットしますか？",
-            isPresented: $isResetConfirmationPresented,
-            titleVisibility: .visible
+            isPresented: $isResetConfirmationPresented
         ) {
+            Button("キャンセル", role: .cancel) {}
             Button("リセット", role: .destructive) {
                 resetTrigger += 1
             }
-            Button("キャンセル", role: .cancel) {}
         } message: {
             Text("配置した推しがすべて消えます。撮影した写真は残ります。")
         }

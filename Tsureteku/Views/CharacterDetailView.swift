@@ -128,13 +128,12 @@ struct CharacterDetailView: View {
         ) { result in
             importModel(result)
         }
-        .confirmationDialog(
+        .alert(
             "3Dモデルを削除しますか？",
-            isPresented: $isModelDeleteConfirmationPresented,
-            titleVisibility: .visible
+            isPresented: $isModelDeleteConfirmationPresented
         ) {
-            Button("削除", role: .destructive, action: removeModel)
             Button("キャンセル", role: .cancel) {}
+            Button("削除", role: .destructive, action: removeModel)
         } message: {
             Text("削除すると元に戻せません。もう一度3D撮影またはUSDZ登録が必要です。")
         }

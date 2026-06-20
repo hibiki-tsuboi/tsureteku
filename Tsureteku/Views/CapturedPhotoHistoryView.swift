@@ -167,14 +167,13 @@ private struct CapturedPhotoDetailView: View {
                 PhotoShareSheet(image: image)
             }
         }
-        .confirmationDialog(
+        .alert(
             isVideo ? "この動画を削除しますか？" : "この写真を削除しますか？",
-            isPresented: $isDeleteConfirmationPresented,
-            titleVisibility: .visible
+            isPresented: $isDeleteConfirmationPresented
         ) {
-            Button("削除", role: .destructive, action: deleteMedia)
             Button("キャンセル", role: .cancel) {
             }
+            Button("削除", role: .destructive, action: deleteMedia)
         }
     }
 
