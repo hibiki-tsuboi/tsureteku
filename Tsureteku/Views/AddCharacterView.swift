@@ -306,9 +306,15 @@ struct AddCharacterView: View {
             return
         }
 
+        var savedOriginalFileName: String?
+        var savedCutoutFileName: String?
+        var insertedCharacter: ToyCharacter?
+
         do {
             let originalFileName = try CharacterImageStore.save(sourceImage, kind: .original)
+            savedOriginalFileName = originalFileName
             let cutoutFileName = try CharacterImageStore.save(cutoutImage, kind: .cutout)
+            savedCutoutFileName = cutoutFileName
             let now = Date()
             let character = ToyCharacter(
                 name: characterName.trimmingCharacters(in: .whitespacesAndNewlines),
@@ -320,9 +326,21 @@ struct AddCharacterView: View {
             )
 
             modelContext.insert(character)
+            insertedCharacter = character
             try modelContext.save()
             dismiss()
         } catch {
+            // 保存に失敗したら、書き出し済みファイルと挿入済みレコードを後始末し、
+            // 孤立ファイルや、削除済みファイルを参照する壊れた推しが残らないようにする。
+            if let insertedCharacter {
+                modelContext.delete(insertedCharacter)
+            }
+            if let savedOriginalFileName {
+                CharacterImageStore.deleteIfExists(fileName: savedOriginalFileName, kind: .original)
+            }
+            if let savedCutoutFileName {
+                CharacterImageStore.deleteIfExists(fileName: savedCutoutFileName, kind: .cutout)
+            }
             errorMessage = error.localizedDescription
         }
     }
