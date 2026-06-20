@@ -32,11 +32,11 @@ struct ARCameraScreen: View {
     @State private var isCameraAccessDenied = false
     @State private var isARUnsupported = false
     @State private var isResetConfirmationPresented = false
+    @State private var isRecordingConfirmationPresented = false
     @State private var isSelfieMode = false
     @State private var isRecording = false
     @State private var isRecordingReadyToStop = false
     @State private var isStoppingRecording = false
-    @State private var recordingStartDate: Date?
     @State private var recordingPreview: RecordingPreviewItem?
     @State private var captureFlashOpacity = 0.0
     @State private var statusMessage: String?
@@ -107,6 +107,14 @@ struct ARCameraScreen: View {
         } message: {
             Text("配置した推しがすべて消えます。撮影した写真は残ります。")
         }
+        .alert("録画を開始します", isPresented: $isRecordingConfirmationPresented) {
+            Button("キャンセル", role: .cancel) {}
+            Button("録画開始") {
+                startRecordingAfterConfirmation()
+            }
+        } message: {
+            Text("録画中は操作ボタンを隠します。画面のどこかをタップすると録画を終了します。推しの配置やサイズ調整は開始前に済ませてください。")
+        }
         .toolbar(isARActive ? .hidden : .visible, for: .tabBar)
     }
 
@@ -142,8 +150,6 @@ struct ARCameraScreen: View {
 
             VStack(spacing: 0) {
                 if isRecording {
-                    recordingIndicator
-                    Spacer()
                     recordingStopControl
                 } else {
                     arHeader
@@ -364,7 +370,7 @@ struct ARCameraScreen: View {
     /// 録画開始ボタン（赤い丸＋ビデオアイコン）。
     private var recordButton: some View {
         Button {
-            startRecording()
+            isRecordingConfirmationPresented = true
         } label: {
             ZStack {
                 Circle()
@@ -380,52 +386,20 @@ struct ARCameraScreen: View {
         .accessibilityLabel("動画を撮影")
     }
 
-    /// 録画状態を見失わないよう、録画中だけ小さく出す経過時間表示。
-    /// ReplayKitは画面全体を録画するため、このHUDは録画にも写る。
-    private var recordingIndicator: some View {
-        HStack(spacing: 6) {
-            Circle()
-                .fill(.red)
-                .frame(width: 8, height: 8)
-
-            if let recordingStartDate {
-                Text(timerInterval: recordingStartDate...Date.distantFuture, countsDown: false)
-                    .font(.callout.weight(.semibold).monospacedDigit())
-            } else {
-                Text("録画開始中")
-                    .font(.callout.weight(.semibold))
-            }
-        }
-        .foregroundStyle(.white)
-        .padding(.horizontal, 12)
-        .padding(.vertical, 7)
-        .background(.black.opacity(0.42), in: Capsule())
-        .padding(.top, 12)
-    }
-
-    /// 録画停止ボタン。ReplayKitは画面全体を録画するため、このボタンは録画にも写る。
+    /// ReplayKitは画面全体を録画するため、録画中は可視UIを出さず透明な停止領域だけを置く。
     private var recordingStopControl: some View {
         Button {
             stopRecordingIfReady()
         } label: {
-            ZStack {
-                Circle()
-                    .fill(.black.opacity(0.32))
-                    .frame(width: 78, height: 78)
-                Circle()
-                    .stroke(.white.opacity(0.9), lineWidth: 4)
-                    .frame(width: 78, height: 78)
-
-                RoundedRectangle(cornerRadius: 6)
-                    .fill(.red)
-                    .frame(width: 30, height: 30)
-            }
+            Color.clear
+                .contentShape(Rectangle())
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .ignoresSafeArea()
         }
         .buttonStyle(.plain)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .accessibilityLabel("録画を停止")
         .disabled(!isRecordingReadyToStop || isStoppingRecording)
-        .opacity(isRecordingReadyToStop && !isStoppingRecording ? 1 : 0.55)
-        .padding(.bottom, 12)
     }
 
     /// 推し情報・選択・サイズを1枚にまとめたパネル。
@@ -726,6 +700,13 @@ struct ARCameraScreen: View {
         }
     }
 
+    private func startRecordingAfterConfirmation() {
+        Task {
+            try? await Task.sleep(for: .milliseconds(320))
+            startRecording()
+        }
+    }
+
     private func startRecording() {
         guard !isRecording, !isStoppingRecording else {
             return
@@ -739,7 +720,6 @@ struct ARCameraScreen: View {
         }
 
         isRecordingReadyToStop = false
-        recordingStartDate = nil
         withAnimation(.easeInOut(duration: 0.2)) {
             isRecording = true
         }
@@ -752,13 +732,11 @@ struct ARCameraScreen: View {
                         isRecording = false
                     }
                     isRecordingReadyToStop = false
-                    recordingStartDate = nil
                     showStatus(error.localizedDescription)
                     return
                 }
 
                 UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-                recordingStartDate = Date()
                 isRecordingReadyToStop = true
             }
         }
@@ -783,7 +761,6 @@ struct ARCameraScreen: View {
         RPScreenRecorder.shared().stopRecording(withOutput: outputURL) { error in
             DispatchQueue.main.async {
                 isStoppingRecording = false
-                recordingStartDate = nil
                 withAnimation(.easeInOut(duration: 0.2)) {
                     isRecording = false
                 }
