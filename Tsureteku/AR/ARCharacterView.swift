@@ -181,7 +181,15 @@ struct ARCharacterView: UIViewRepresentable {
         var isSceneEmpty: Binding<Bool>
         var isCoachingActive: Binding<Bool>
         var isSelfieMode = false
-        var isRecording = false
+        var isRecording = false {
+            didSet {
+                guard isRecording != oldValue else {
+                    return
+                }
+
+                updateSelectionMarkerVisibility()
+            }
+        }
         /// 検出面の中央に出す配置レティクル（吸着リング）とその土台アンカー。
         private var reticleAnchor: AnchorEntity?
         private var reticleEntity: Entity?
@@ -719,9 +727,9 @@ struct ARCharacterView: UIViewRepresentable {
         }
 
         func clearSelectedPlacement() {
-            selectedPlacement?.selectionMarker.isEnabled = false
             selectedPlacementID = nil
             selectedPlacementName.wrappedValue = nil
+            updateSelectionMarkerVisibility()
         }
 
         private var selectedPlacement: PlacedCharacter? {
@@ -907,10 +915,15 @@ struct ARCharacterView: UIViewRepresentable {
         }
 
         private func selectPlacement(_ placement: PlacedCharacter) {
-            placements.forEach { $0.selectionMarker.isEnabled = false }
-            placement.selectionMarker.isEnabled = true
             selectedPlacementID = placement.id
             selectedPlacementName.wrappedValue = placement.name
+            updateSelectionMarkerVisibility()
+        }
+
+        private func updateSelectionMarkerVisibility() {
+            placements.forEach { placement in
+                placement.selectionMarker.isEnabled = !isRecording && placement.id == selectedPlacementID
+            }
         }
 
         /// 置いた推しに“動き”をつける。USDZにアニメーションがあれば再生し、
