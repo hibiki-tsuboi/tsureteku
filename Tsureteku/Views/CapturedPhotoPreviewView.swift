@@ -41,6 +41,16 @@ struct CapturedPhotoPreviewView: View {
             }
             .navigationTitle("撮影プレビュー")
             .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button {
+                        dismiss()
+                    } label: {
+                        Image(systemName: "xmark")
+                    }
+                    .accessibilityLabel("閉じる")
+                }
+            }
             .toolbarColorScheme(.dark, for: .navigationBar)
             .toolbarBackground(.visible, for: .navigationBar)
             .sheet(isPresented: $isShareSheetPresented) {
@@ -69,15 +79,6 @@ struct CapturedPhotoPreviewView: View {
             }
 
             HStack(spacing: 12) {
-                Button {
-                    dismiss()
-                } label: {
-                    Label("撮り直す", systemImage: "arrow.counterclockwise")
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.bordered)
-                .tint(.white)
-
                 Button {
                     savePhoto()
                 } label: {
