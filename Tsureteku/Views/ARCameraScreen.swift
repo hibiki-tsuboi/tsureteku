@@ -585,7 +585,7 @@ struct ARCameraScreen: View {
     @ViewBuilder
     private var placementTools: some View {
         if selectedPlacementName != nil {
-            HStack(spacing: 10) {
+            HStack(spacing: 0) {
                 placementToolButton(systemImage: "minus.circle", accessibilityLabel: "選択中の推しを小さく") {
                     scaleDownTrigger += 1
                 }
@@ -612,8 +612,9 @@ struct ARCameraScreen: View {
                     }
                 }
             }
-            .padding(.horizontal, 14)
+            .padding(.horizontal, 10)
             .padding(.vertical, 10)
+            .frame(maxWidth: .infinity)
             .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 26))
             .padding(.horizontal, 14)
         }
@@ -627,12 +628,18 @@ struct ARCameraScreen: View {
     ) -> some View {
         Button(role: role, action: action) {
             Image(systemName: systemImage)
-                .font(.headline)
-                .frame(maxWidth: .infinity)
-                .frame(height: 38)
+                .font(.title3.weight(.semibold))
+                .frame(width: 44, height: 44)
+                .foregroundStyle(role == .destructive ? .red : .primary)
+                .background(.thinMaterial, in: Circle())
+                .overlay {
+                    Circle()
+                        .stroke(.white.opacity(0.24), lineWidth: 1)
+                }
         }
-        .buttonStyle(.bordered)
+        .buttonStyle(.plain)
         .accessibilityLabel(accessibilityLabel)
+        .frame(maxWidth: .infinity)
     }
 
     private var selectedAsset: CharacterARAsset? {
