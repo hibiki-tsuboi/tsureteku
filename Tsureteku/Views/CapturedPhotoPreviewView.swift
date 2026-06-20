@@ -8,12 +8,20 @@
 import SwiftUI
 import UIKit
 
+/// 撮影写真の保存結果。アプリ内の履歴を主たる保存先とし、写真ライブラリ保存は付加的に行う。
+enum CapturedPhotoSaveOutcome {
+    /// 履歴・写真ライブラリの両方に保存できた。
+    case savedToLibrary
+    /// 履歴には保存できたが、写真ライブラリへは保存できなかった（権限拒否など）。
+    case savedToHistoryOnly(libraryError: Error)
+}
+
 struct CapturedPhotoPreviewView: View {
     @Environment(\.dismiss) private var dismiss
 
     let image: UIImage
-    var onSave: (UIImage, @escaping (Result<Void, Error>) -> Void) -> Void
-    var onSaveCompleted: (Result<Void, Error>) -> Void
+    var onSave: (UIImage, @escaping (Result<CapturedPhotoSaveOutcome, Error>) -> Void) -> Void
+    var onSaveCompleted: (Result<CapturedPhotoSaveOutcome, Error>) -> Void
 
     @State private var isSaving = false
     @State private var didSave = false
@@ -121,9 +129,12 @@ struct CapturedPhotoPreviewView: View {
             isSaving = false
 
             switch result {
-            case .success:
+            case .success(.savedToLibrary):
                 didSave = true
                 statusMessage = "写真ライブラリに保存しました。"
+            case .success(.savedToHistoryOnly(let libraryError)):
+                didSave = true
+                statusMessage = "履歴に保存しました。\(libraryError.localizedDescription)"
             case .failure(let error):
                 statusMessage = error.localizedDescription
             }
@@ -147,6 +158,6 @@ struct PhotoShareSheet: UIViewControllerRepresentable {
 #Preview {
     CapturedPhotoPreviewView(
         image: UIImage(systemName: "photo") ?? UIImage(),
-        onSave: { _, completion in completion(.success(())) }
+        onSave: { _, completion in completion(.success(.savedToLibrary)) }
     ) { _ in }
 }

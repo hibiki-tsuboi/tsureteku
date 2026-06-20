@@ -819,10 +819,12 @@ struct ARCameraScreen: View {
         }
     }
 
-    private func handlePreviewSave(_ result: Result<Void, Error>) {
+    private func handlePreviewSave(_ result: Result<CapturedPhotoSaveOutcome, Error>) {
         switch result {
-        case .success:
+        case .success(.savedToLibrary):
             showStatus("写真ライブラリに保存しました。")
+        case .success(.savedToHistoryOnly):
+            showStatus("履歴に保存しました。")
         case .failure(let error):
             showStatus(error.localizedDescription)
         }
@@ -837,22 +839,25 @@ struct ARCameraScreen: View {
         }
     }
 
-    private func saveCapturedPhoto(_ image: UIImage, completion: @escaping (Result<Void, Error>) -> Void) {
+    private func saveCapturedPhoto(_ image: UIImage, completion: @escaping (Result<CapturedPhotoSaveOutcome, Error>) -> Void) {
+        // アプリ内の履歴が主たる保存先。まずここへ確実に残し、写真ライブラリ保存は付加的に行う。
+        // こうすることで写真ライブラリの権限が拒否されても、履歴から写真が失われない。
+        do {
+            let fileName = try CapturedPhotoStore.save(image)
+            let photo = CapturedPhoto(imageFileName: fileName)
+            modelContext.insert(photo)
+            try modelContext.save()
+        } catch {
+            completion(.failure(error))
+            return
+        }
+
         PhotoLibrarySaver.save(image) { result in
             switch result {
             case .success:
-                do {
-                    let fileName = try CapturedPhotoStore.save(image)
-                    let photo = CapturedPhoto(imageFileName: fileName)
-                    modelContext.insert(photo)
-                    try modelContext.save()
-                    completion(.success(()))
-                } catch {
-                    completion(.failure(error))
-                }
-
-            case .failure(let error):
-                completion(.failure(error))
+                completion(.success(.savedToLibrary))
+            case .failure(let libraryError):
+                completion(.success(.savedToHistoryOnly(libraryError: libraryError)))
             }
         }
     }
