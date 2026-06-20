@@ -65,7 +65,9 @@ struct ARCameraScreen: View {
         .sheet(isPresented: $isAddingCharacter) {
             AddCharacterView()
         }
-        .fullScreenCover(item: $capturedPhoto) { photo in
+        .fullScreenCover(item: $capturedPhoto, onDismiss: {
+            capturedPhoto = nil
+        }) { photo in
             CapturedPhotoPreviewView(image: photo.image, onSave: saveCapturedPhoto) { result in
                 handlePreviewSave(result)
             }
@@ -699,6 +701,8 @@ struct ARCameraScreen: View {
     }
 
     private func activateAR() {
+        // 撮影プレビューを閉じた後に古い写真状態が残っていても、次回起動時に再表示しない。
+        capturedPhoto = nil
         // AR画面を開くたびに、推しピッカー・サイズ調整をすぐ使えるよう展開しておく。
         isControlPanelExpanded = true
 

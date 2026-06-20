@@ -47,7 +47,7 @@ struct ARCharacterView: UIViewRepresentable {
     var onStatus: (String) -> Void
 
     func makeCoordinator() -> Coordinator {
-        Coordinator(
+        let coordinator = Coordinator(
             selectedAsset: selectedAsset,
             selectedPlacementName: $selectedPlacementName,
             isSceneEmpty: $isSceneEmpty,
@@ -55,6 +55,18 @@ struct ARCharacterView: UIViewRepresentable {
             onCapture: onCapture,
             onStatus: onStatus
         )
+        coordinator.syncTriggerBaselines(
+            captureTrigger: captureTrigger,
+            resetTrigger: resetTrigger,
+            scaleDownTrigger: scaleDownTrigger,
+            scaleUpTrigger: scaleUpTrigger,
+            rotateLeftTrigger: rotateLeftTrigger,
+            rotateRightTrigger: rotateRightTrigger,
+            faceCameraTrigger: faceCameraTrigger,
+            removeSelectedTrigger: removeSelectedTrigger,
+            clearPlacementSelectionTrigger: clearPlacementSelectionTrigger
+        )
+        return coordinator
     }
 
     func makeUIView(context: Context) -> ARView {
@@ -209,6 +221,28 @@ struct ARCharacterView: UIViewRepresentable {
             self.isCoachingActive = isCoachingActive
             self.onCapture = onCapture
             self.onStatus = onStatus
+        }
+
+        func syncTriggerBaselines(
+            captureTrigger: Int,
+            resetTrigger: Int,
+            scaleDownTrigger: Int,
+            scaleUpTrigger: Int,
+            rotateLeftTrigger: Int,
+            rotateRightTrigger: Int,
+            faceCameraTrigger: Int,
+            removeSelectedTrigger: Int,
+            clearPlacementSelectionTrigger: Int
+        ) {
+            lastCaptureTrigger = captureTrigger
+            lastResetTrigger = resetTrigger
+            lastScaleDownTrigger = scaleDownTrigger
+            lastScaleUpTrigger = scaleUpTrigger
+            lastRotateLeftTrigger = rotateLeftTrigger
+            lastRotateRightTrigger = rotateRightTrigger
+            lastFaceCameraTrigger = faceCameraTrigger
+            lastRemoveSelectedTrigger = removeSelectedTrigger
+            lastClearPlacementSelectionTrigger = clearPlacementSelectionTrigger
         }
 
         func configure(_ arView: ARView) {
