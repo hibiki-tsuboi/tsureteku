@@ -19,7 +19,6 @@ struct ARCameraScreen: View {
 
     @State private var selectedCharacterID: UUID?
     @State private var captureTrigger = 0
-    @State private var removeLastTrigger = 0
     @State private var resetTrigger = 0
     @State private var scaleDownTrigger = 0
     @State private var scaleUpTrigger = 0
@@ -113,7 +112,6 @@ struct ARCameraScreen: View {
                 isSelfieMode: isSelfieMode,
                 isRecording: isRecording,
                 captureTrigger: $captureTrigger,
-                removeLastTrigger: $removeLastTrigger,
                 resetTrigger: $resetTrigger,
                 scaleDownTrigger: $scaleDownTrigger,
                 scaleUpTrigger: $scaleUpTrigger,
@@ -220,17 +218,6 @@ struct ARCameraScreen: View {
                 }
 
                 if !isSelfieMode {
-                    Button {
-                        removeLastTrigger += 1
-                    } label: {
-                        Image(systemName: "arrow.uturn.backward")
-                            .font(.headline)
-                            .frame(width: 42, height: 42)
-                    }
-                    .buttonStyle(.bordered)
-                    .clipShape(Circle())
-                    .accessibilityLabel("最後の配置を削除")
-
                     Button {
                         isResetConfirmationPresented = true
                     } label: {
@@ -603,7 +590,7 @@ struct ARCameraScreen: View {
                 }
 
                 if !isSelfieMode {
-                    placementToolButton(systemImage: "camera.viewfinder", accessibilityLabel: "選択中の推しをカメラに向ける") {
+                    placementToolButton(systemImage: "arrow.uturn.backward", accessibilityLabel: "選択中の推しをカメラに向ける") {
                         faceCameraTrigger += 1
                     }
 
@@ -630,7 +617,7 @@ struct ARCameraScreen: View {
             Image(systemName: systemImage)
                 .font(.title3.weight(.semibold))
                 .frame(width: 44, height: 44)
-                .foregroundStyle(role == .destructive ? .red : .primary)
+                .foregroundStyle(role == .destructive ? .red : BrandColor.purple)
                 .background(.thinMaterial, in: Circle())
                 .overlay {
                     Circle()

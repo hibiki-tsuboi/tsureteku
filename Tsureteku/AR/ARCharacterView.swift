@@ -30,7 +30,6 @@ struct ARCharacterView: UIViewRepresentable {
     /// 録画中はレティクルが画面収録に写り込まないよう隠すためのフラグ。
     var isRecording: Bool
     @Binding var captureTrigger: Int
-    @Binding var removeLastTrigger: Int
     @Binding var resetTrigger: Int
     @Binding var scaleDownTrigger: Int
     @Binding var scaleUpTrigger: Int
@@ -80,14 +79,6 @@ struct ARCharacterView: UIViewRepresentable {
 
             if captureTrigger > 0 {
                 context.coordinator.capture(in: arView)
-            }
-        }
-
-        if removeLastTrigger != context.coordinator.lastRemoveLastTrigger {
-            context.coordinator.lastRemoveLastTrigger = removeLastTrigger
-
-            if removeLastTrigger > 0 {
-                context.coordinator.removeLastPlacement(in: arView)
             }
         }
 
@@ -164,7 +155,6 @@ struct ARCharacterView: UIViewRepresentable {
     final class Coordinator: NSObject, ARCoachingOverlayViewDelegate {
         var selectedAsset: CharacterARAsset?
         var lastCaptureTrigger = 0
-        var lastRemoveLastTrigger = 0
         var lastResetTrigger = 0
         var lastScaleDownTrigger = 0
         var lastScaleUpTrigger = 0
@@ -622,19 +612,6 @@ struct ARCharacterView: UIViewRepresentable {
                 // 写真切り抜きは軽量なので同期のまま実行し、結果をコールバックへ渡す。
                 completion(Result { try placeCutout(asset, at: result, in: arView) })
             }
-        }
-
-        func removeLastPlacement(in arView: ARView) {
-            guard let placement = placements.popLast() else {
-                onStatus("削除できる推しがありません。")
-                return
-            }
-
-            arView.scene.removeAnchor(placement.anchor)
-            if selectedPlacementID == placement.id {
-                clearSelectedPlacement()
-            }
-            onStatus("最後の推しを削除しました。")
         }
 
         func resetPlacements(in arView: ARView) {
