@@ -36,6 +36,7 @@ struct ARCameraScreen: View {
     @State private var isRecording = false
     @State private var isRecordingReadyToStop = false
     @State private var isStoppingRecording = false
+    @State private var recordingStartDate: Date?
     @State private var recordingPreview: RecordingPreviewItem?
     @State private var captureFlashOpacity = 0.0
     @State private var statusMessage: String?
@@ -141,6 +142,8 @@ struct ARCameraScreen: View {
 
             VStack(spacing: 0) {
                 if isRecording {
+                    recordingIndicator
+                    Spacer()
                     recordingStopControl
                 } else {
                     arHeader
@@ -377,20 +380,52 @@ struct ARCameraScreen: View {
         .accessibilityLabel("動画を撮影")
     }
 
-    /// ReplayKitは画面全体を録画するため、録画中は可視UIを出さず透明な停止領域だけを置く。
+    /// 録画状態を見失わないよう、録画中だけ小さく出す経過時間表示。
+    /// ReplayKitは画面全体を録画するため、このHUDは録画にも写る。
+    private var recordingIndicator: some View {
+        HStack(spacing: 6) {
+            Circle()
+                .fill(.red)
+                .frame(width: 8, height: 8)
+
+            if let recordingStartDate {
+                Text(timerInterval: recordingStartDate...Date.distantFuture, countsDown: false)
+                    .font(.callout.weight(.semibold).monospacedDigit())
+            } else {
+                Text("録画開始中")
+                    .font(.callout.weight(.semibold))
+            }
+        }
+        .foregroundStyle(.white)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 7)
+        .background(.black.opacity(0.42), in: Capsule())
+        .padding(.top, 12)
+    }
+
+    /// 録画停止ボタン。ReplayKitは画面全体を録画するため、このボタンは録画にも写る。
     private var recordingStopControl: some View {
         Button {
             stopRecordingIfReady()
         } label: {
-            Color.clear
-                .contentShape(Rectangle())
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .ignoresSafeArea()
+            ZStack {
+                Circle()
+                    .fill(.black.opacity(0.32))
+                    .frame(width: 78, height: 78)
+                Circle()
+                    .stroke(.white.opacity(0.9), lineWidth: 4)
+                    .frame(width: 78, height: 78)
+
+                RoundedRectangle(cornerRadius: 6)
+                    .fill(.red)
+                    .frame(width: 30, height: 30)
+            }
         }
         .buttonStyle(.plain)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .accessibilityLabel("録画を停止")
         .disabled(!isRecordingReadyToStop || isStoppingRecording)
+        .opacity(isRecordingReadyToStop && !isStoppingRecording ? 1 : 0.55)
+        .padding(.bottom, 12)
     }
 
     /// 推し情報・選択・サイズを1枚にまとめたパネル。
@@ -704,6 +739,7 @@ struct ARCameraScreen: View {
         }
 
         isRecordingReadyToStop = false
+        recordingStartDate = nil
         withAnimation(.easeInOut(duration: 0.2)) {
             isRecording = true
         }
@@ -716,11 +752,13 @@ struct ARCameraScreen: View {
                         isRecording = false
                     }
                     isRecordingReadyToStop = false
+                    recordingStartDate = nil
                     showStatus(error.localizedDescription)
                     return
                 }
 
                 UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                recordingStartDate = Date()
                 isRecordingReadyToStop = true
             }
         }
@@ -745,6 +783,7 @@ struct ARCameraScreen: View {
         RPScreenRecorder.shared().stopRecording(withOutput: outputURL) { error in
             DispatchQueue.main.async {
                 isStoppingRecording = false
+                recordingStartDate = nil
                 withAnimation(.easeInOut(duration: 0.2)) {
                     isRecording = false
                 }
