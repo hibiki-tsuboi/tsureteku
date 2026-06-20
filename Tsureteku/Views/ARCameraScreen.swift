@@ -830,10 +830,12 @@ struct ARCameraScreen: View {
         }
     }
 
-    private func handleVideoPreviewSave(_ result: Result<Void, Error>) {
+    private func handleVideoPreviewSave(_ result: Result<CapturedPhotoSaveOutcome, Error>) {
         switch result {
-        case .success:
+        case .success(.savedToLibrary):
             showStatus("写真ライブラリに保存しました。")
+        case .success(.savedToHistoryOnly):
+            showStatus("履歴に保存しました。")
         case .failure(let error):
             showStatus(error.localizedDescription)
         }
@@ -862,8 +864,53 @@ struct ARCameraScreen: View {
         }
     }
 
-    private func saveRecordedVideo(_ url: URL, completion: @escaping (Result<Void, Error>) -> Void) {
-        PhotoLibrarySaver.saveVideo(at: url, completion: completion)
+    private func saveRecordedVideo(_ url: URL, completion: @escaping (Result<CapturedPhotoSaveOutcome, Error>) -> Void) {
+        // アプリ内の履歴を主たる保存先とし、動画を恒久ディレクトリへ保存してから写真ライブラリへ
+        // 付加的に保存する。重いファイルIO・ポスター生成はメインスレッド外で行い、SwiftData更新だけ
+        // メインアクターで実行する。
+        Task {
+            var savedVideoFileName: String?
+            var savedPosterFileName: String?
+
+            do {
+                let videoFileName = try CapturedPhotoStore.saveVideo(from: url)
+                savedVideoFileName = videoFileName
+
+                let storedURL = CapturedPhotoStore.videoURL(named: videoFileName) ?? url
+                let poster = await CapturedPhotoStore.makePosterImage(from: storedURL)
+                    ?? CapturedPhotoStore.placeholderPosterImage()
+                let posterFileName = try CapturedPhotoStore.save(poster)
+                savedPosterFileName = posterFileName
+
+                try await MainActor.run {
+                    let media = CapturedPhoto(
+                        imageFileName: posterFileName,
+                        videoFileName: videoFileName,
+                        mediaType: .video
+                    )
+                    modelContext.insert(media)
+                    try modelContext.save()
+                }
+
+                // ライブラリ保存は付加的。失敗しても履歴には残っているので致命ではない。
+                // 一時ファイルではなく恒久コピーを渡し、プレビュー終了時の一時ファイル削除と競合させない。
+                PhotoLibrarySaver.saveVideo(at: storedURL) { result in
+                    switch result {
+                    case .success:
+                        completion(.success(.savedToLibrary))
+                    case .failure(let libraryError):
+                        completion(.success(.savedToHistoryOnly(libraryError: libraryError)))
+                    }
+                }
+            } catch {
+                // 履歴への保存に失敗したら、作りかけのファイルを後始末する。
+                CapturedPhotoStore.deleteIfExists(fileName: savedVideoFileName)
+                CapturedPhotoStore.deleteIfExists(fileName: savedPosterFileName)
+                await MainActor.run {
+                    completion(.failure(error))
+                }
+            }
+        }
     }
 
     private func showStatus(_ message: String) {

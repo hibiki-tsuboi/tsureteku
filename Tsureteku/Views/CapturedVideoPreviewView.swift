@@ -13,8 +13,8 @@ struct CapturedVideoPreviewView: View {
     @Environment(\.dismiss) private var dismiss
 
     let videoURL: URL
-    var onSave: (URL, @escaping (Result<Void, Error>) -> Void) -> Void
-    var onSaveCompleted: (Result<Void, Error>) -> Void
+    var onSave: (URL, @escaping (Result<CapturedPhotoSaveOutcome, Error>) -> Void) -> Void
+    var onSaveCompleted: (Result<CapturedPhotoSaveOutcome, Error>) -> Void
 
     @State private var player: AVPlayer
     @State private var isSaving = false
@@ -24,8 +24,8 @@ struct CapturedVideoPreviewView: View {
 
     init(
         videoURL: URL,
-        onSave: @escaping (URL, @escaping (Result<Void, Error>) -> Void) -> Void,
-        onSaveCompleted: @escaping (Result<Void, Error>) -> Void
+        onSave: @escaping (URL, @escaping (Result<CapturedPhotoSaveOutcome, Error>) -> Void) -> Void,
+        onSaveCompleted: @escaping (Result<CapturedPhotoSaveOutcome, Error>) -> Void
     ) {
         self.videoURL = videoURL
         self.onSave = onSave
@@ -145,9 +145,12 @@ struct CapturedVideoPreviewView: View {
             isSaving = false
 
             switch result {
-            case .success:
+            case .success(.savedToLibrary):
                 didSave = true
                 statusMessage = "写真ライブラリに保存しました。"
+            case .success(.savedToHistoryOnly(let libraryError)):
+                didSave = true
+                statusMessage = "履歴に保存しました。\(libraryError.localizedDescription)"
             case .failure(let error):
                 statusMessage = error.localizedDescription
             }
@@ -171,6 +174,6 @@ struct VideoShareSheet: UIViewControllerRepresentable {
 #Preview {
     CapturedVideoPreviewView(
         videoURL: URL(fileURLWithPath: "/tmp/preview.mp4"),
-        onSave: { _, completion in completion(.success(())) }
+        onSave: { _, completion in completion(.success(.savedToLibrary)) }
     ) { _ in }
 }
