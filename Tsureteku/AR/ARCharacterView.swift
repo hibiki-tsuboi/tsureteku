@@ -214,6 +214,7 @@ struct ARCharacterView: UIViewRepresentable {
         private var selfieAssetID: UUID?
         private var selfieSize: Float?
         private var selfieScaleDivisor: Float = 1
+        private var selfieUnscaledHeight: Float = 1
 
         init(
             selectedAsset: CharacterARAsset?,
@@ -385,6 +386,7 @@ struct ARCharacterView: UIViewRepresentable {
                 if selfieSize != asset.defaultSizeMeters, let placement = placements.first {
                     let scale = asset.defaultSizeMeters / selfieScaleDivisor
                     placement.entity.scale = SIMD3<Float>(repeating: scale)
+                    placement.entity.position = selfiePosition(scaledHeight: selfieUnscaledHeight * scale)
                     selfieSize = asset.defaultSizeMeters
                 }
                 return
@@ -406,6 +408,7 @@ struct ARCharacterView: UIViewRepresentable {
         private func placeSelfieCharacter(_ asset: CharacterARAsset, in arView: ARView) throws -> PlacedCharacter {
             let entity: ModelEntity
             let divisor: Float
+            let unscaledHeight: Float
 
             if let modelFileName = asset.modelFileName {
                 let modelURL = try CharacterImageStore.modelURL(for: modelFileName)
@@ -413,6 +416,7 @@ struct ARCharacterView: UIViewRepresentable {
                 let bounds = loaded.visualBounds(recursive: true, relativeTo: loaded)
                 let maxExtent = max(bounds.extents.x, bounds.extents.y, bounds.extents.z)
                 divisor = maxExtent > 0 ? maxExtent : 1
+                unscaledHeight = max(bounds.extents.y, 0.01)
 
                 // モデルの中心を原点に合わせ、拡大・回転がぶれないようにする。
                 let center = (bounds.min + bounds.max) / 2
@@ -420,8 +424,7 @@ struct ARCharacterView: UIViewRepresentable {
 
                 let container = ModelEntity()
                 container.addChild(loaded)
-                // モデルの正面（-Z）をカメラ（顔アンカーの+Z）へ向ける。
-                container.orientation = simd_quatf(angle: (asset.modelYawDegrees + 180) * .pi / 180, axis: [0, 1, 0])
+                container.orientation = simd_quatf(angle: asset.modelYawDegrees * .pi / 180, axis: [0, 1, 0])
                 entity = container
             } else {
                 let imageURL = try CharacterImageStore.url(for: asset.cutoutImageFileName, kind: .cutout)
@@ -437,13 +440,14 @@ struct ARCharacterView: UIViewRepresentable {
 
                 entity = ModelEntity(mesh: mesh, materials: [material])
                 divisor = 1.0
+                unscaledHeight = 1.0
             }
 
             entity.name = asset.name
             let scale = asset.defaultSizeMeters / divisor
             entity.scale = SIMD3<Float>(repeating: scale)
-            // 顔の横、少し手前に配置する。
-            entity.position = [0.16, 0, 0.06]
+            // 顔トラッキングでは肩そのものは取れないため、顔アンカーから肩寄りの固定位置へ置く。
+            entity.position = selfiePosition(scaledHeight: unscaledHeight * scale)
             entity.generateCollisionShapes(recursive: true)
 
             let anchor = AnchorEntity(.face)
@@ -453,6 +457,7 @@ struct ARCharacterView: UIViewRepresentable {
             startIdleAnimation(for: entity)
 
             selfieScaleDivisor = divisor
+            selfieUnscaledHeight = unscaledHeight
 
             return PlacedCharacter(
                 anchor: anchor,
@@ -462,6 +467,11 @@ struct ARCharacterView: UIViewRepresentable {
                 yawCorrectionDegrees: asset.modelYawDegrees,
                 selectionMarker: Entity()
             )
+        }
+
+        private func selfiePosition(scaledHeight: Float) -> SIMD3<Float> {
+            let shoulderLineY: Float = -0.10
+            return [0.18, shoulderLineY + scaledHeight * 0.45, 0.035]
         }
 
         private func removeAllPlacements(in arView: ARView) {
