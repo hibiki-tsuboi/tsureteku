@@ -592,7 +592,7 @@ struct ARCameraScreen: View {
                 }
 
                 if !isSelfieMode {
-                    placementToolButton(systemImage: "arrow.uturn.backward", accessibilityLabel: "選択中の推しをカメラに向ける") {
+                    placementToolButton(systemImage: "scope", accessibilityLabel: "選択中の推しをカメラに向ける") {
                         faceCameraTrigger += 1
                     }
 
