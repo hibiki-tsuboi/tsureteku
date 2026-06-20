@@ -78,12 +78,6 @@ struct ObjectCapturePreparationView: View {
 
                 CaptureTutorialStepRow(
                     number: 3,
-                    title: "裏側を撮影",
-                    description: "表側が終わったら、必要に応じて裏返して背面も撮ります。"
-                )
-
-                CaptureTutorialStepRow(
-                    number: 4,
                     title: "3Dモデルを作成",
                     description: "撮影データからUSDZモデルを作り、AR配置で使えるようにします。"
                 )

@@ -24,7 +24,6 @@ struct ObjectCaptureWorkflowView: View {
     @State private var feedback: Set<ObjectCaptureSession.Feedback> = []
     @State private var cameraTracking: ObjectCaptureSession.Tracking = .notAvailable
     @State private var canRequestImageCapture = false
-    @State private var userCompletedScanPass = false
     @State private var numberOfShotsTaken = 0
     @State private var isReconstructing = false
     @State private var reconstructionProgress = 0.0
@@ -44,6 +43,10 @@ struct ObjectCaptureWorkflowView: View {
 
     private var session: ObjectCaptureSession {
         sessionStore.session
+    }
+
+    private var actionButtonMinHeight: CGFloat {
+        46
     }
 
     var body: some View {
@@ -122,14 +125,6 @@ struct ObjectCaptureWorkflowView: View {
 
             for await canRequestImageCapture in currentSession.canRequestImageCaptureUpdates {
                 self.canRequestImageCapture = canRequestImageCapture
-            }
-        }
-        .task(id: session.id) {
-            let currentSession = session
-            userCompletedScanPass = currentSession.userCompletedScanPass
-
-            for await userCompletedScanPass in currentSession.userCompletedScanPassUpdates {
-                self.userCompletedScanPass = userCompletedScanPass
             }
         }
         .task(id: session.id) {
@@ -266,16 +261,6 @@ struct ObjectCaptureWorkflowView: View {
 
     private var actionPanel: some View {
         VStack(alignment: .leading, spacing: 12) {
-            if userCompletedScanPass {
-                Button {
-                    beginBackSideCapture()
-                } label: {
-                    Label("裏側を撮る", systemImage: "arrow.triangle.2.circlepath.camera")
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.borderedProminent)
-            }
-
             HStack(spacing: 12) {
                 primaryButton
 
@@ -284,7 +269,7 @@ struct ObjectCaptureWorkflowView: View {
                         session.finish()
                     } label: {
                         Label("完了", systemImage: "checkmark")
-                            .frame(minWidth: 86, minHeight: 46)
+                            .frame(minWidth: 86, minHeight: actionButtonMinHeight)
                     }
                     .buttonStyle(.bordered)
                     .disabled(!canFinish)
@@ -300,7 +285,7 @@ struct ObjectCaptureWorkflowView: View {
                         reconstructionFailed ? "もう一度作成する" : "3Dモデルを作成",
                         systemImage: reconstructionFailed ? "arrow.clockwise" : "cube"
                     )
-                    .frame(maxWidth: .infinity)
+                    .frame(maxWidth: .infinity, minHeight: actionButtonMinHeight)
                 }
                 .buttonStyle(.borderedProminent)
                 .disabled(isReconstructing || !canGenerateModel)
@@ -325,7 +310,7 @@ struct ObjectCaptureWorkflowView: View {
                 session.resetDetection()
             } label: {
                 Label("準備中", systemImage: "hourglass")
-                    .frame(maxWidth: .infinity)
+                    .frame(maxWidth: .infinity, minHeight: actionButtonMinHeight)
             }
             .buttonStyle(.bordered)
             .disabled(true)
@@ -335,7 +320,7 @@ struct ObjectCaptureWorkflowView: View {
                 startDetection()
             } label: {
                 Label("推しを認識", systemImage: "viewfinder")
-                    .frame(maxWidth: .infinity)
+                    .frame(maxWidth: .infinity, minHeight: actionButtonMinHeight)
             }
             .buttonStyle(.borderedProminent)
 
@@ -344,7 +329,7 @@ struct ObjectCaptureWorkflowView: View {
                 startCapturing()
             } label: {
                 Label("周りを撮影", systemImage: "record.circle")
-                    .frame(maxWidth: .infinity)
+                    .frame(maxWidth: .infinity, minHeight: actionButtonMinHeight)
             }
             .buttonStyle(.borderedProminent)
 
@@ -353,7 +338,7 @@ struct ObjectCaptureWorkflowView: View {
                 requestManualCapture()
             } label: {
                 Label("1枚撮る", systemImage: "camera")
-                    .frame(maxWidth: .infinity)
+                    .frame(maxWidth: .infinity, minHeight: actionButtonMinHeight)
             }
             .buttonStyle(.borderedProminent)
             .disabled(!canRequestImageCapture)
@@ -362,14 +347,14 @@ struct ObjectCaptureWorkflowView: View {
             Button {
             } label: {
                 Label("保存中", systemImage: "hourglass")
-                    .frame(maxWidth: .infinity)
+                    .frame(maxWidth: .infinity, minHeight: actionButtonMinHeight)
             }
             .buttonStyle(.bordered)
             .disabled(true)
 
         case .completed:
             let retakeLabel = Label("撮り直す", systemImage: "arrow.counterclockwise")
-                .frame(maxWidth: .infinity)
+                .frame(maxWidth: .infinity, minHeight: actionButtonMinHeight)
             // 生成に失敗したときは、撮り直しが有力な選択肢なので目立たせる。
             if reconstructionFailed {
                 Button(action: restartCaptureSet) { retakeLabel }
@@ -386,7 +371,7 @@ struct ObjectCaptureWorkflowView: View {
                 restartCaptureSet()
             } label: {
                 Label("再開", systemImage: "arrow.clockwise")
-                    .frame(maxWidth: .infinity)
+                    .frame(maxWidth: .infinity, minHeight: actionButtonMinHeight)
             }
             .buttonStyle(.borderedProminent)
 
@@ -395,7 +380,7 @@ struct ObjectCaptureWorkflowView: View {
                 restartCaptureSet()
             } label: {
                 Label("再開", systemImage: "arrow.clockwise")
-                    .frame(maxWidth: .infinity)
+                    .frame(maxWidth: .infinity, minHeight: actionButtonMinHeight)
             }
             .buttonStyle(.borderedProminent)
         }
@@ -408,10 +393,6 @@ struct ObjectCaptureWorkflowView: View {
 
         if case .completed = captureState {
             return .generate
-        }
-
-        if userCompletedScanPass {
-            return .backSide
         }
 
         switch captureState {
@@ -429,10 +410,6 @@ struct ObjectCaptureWorkflowView: View {
     }
 
     private var stepInstruction: String {
-        if userCompletedScanPass {
-            return "表側の撮影が一区切りつきました。必要なら推しを裏返して、裏側も撮影します。"
-        }
-
         switch captureState {
         case .initializing:
             return "カメラを準備しています。推しを明るい場所に置いて、全体が見える位置にします。"
@@ -557,7 +534,6 @@ struct ObjectCaptureWorkflowView: View {
         feedback = []
         cameraTracking = .notAvailable
         canRequestImageCapture = false
-        userCompletedScanPass = false
         numberOfShotsTaken = 0
         reconstructionProgress = 0
         reconstructionStatus = ""
@@ -657,12 +633,6 @@ struct ObjectCaptureWorkflowView: View {
     private func requestManualCapture() {
         session.requestImageCapture()
         statusMessage = "1枚撮影しました。角度を少し変えて続けてください。"
-    }
-
-    private func beginBackSideCapture() {
-        userCompletedScanPass = false
-        statusMessage = "裏側の撮影を始めます。推しを裏返してゆっくり撮影してください。"
-        session.beginNewScanPassAfterFlip()
     }
 
     private func restorePreviousCaptureDirectoryIfEmpty() {
@@ -848,7 +818,7 @@ struct ObjectCaptureWorkflowView: View {
         case .outOfFieldOfView:
             "画面外です"
         case .objectNotFlippable:
-            "反転撮影に不向きです"
+            "撮影しにくい形状です"
         case .overCapturing:
             "撮りすぎています"
         case .objectNotDetected:
@@ -864,7 +834,6 @@ private enum CaptureWorkflowStep: Int, CaseIterable, Identifiable {
     case setup
     case recognize
     case capture
-    case backSide
     case generate
 
     var id: Self {
@@ -883,8 +852,6 @@ private enum CaptureWorkflowStep: Int, CaseIterable, Identifiable {
             "認識"
         case .capture:
             "周囲を撮影"
-        case .backSide:
-            "裏側を撮影"
         case .generate:
             "3Dモデル作成"
         }
@@ -898,8 +865,6 @@ private enum CaptureWorkflowStep: Int, CaseIterable, Identifiable {
             "viewfinder"
         case .capture:
             "camera"
-        case .backSide:
-            "arrow.triangle.2.circlepath.camera"
         case .generate:
             "cube"
         }
