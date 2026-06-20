@@ -38,24 +38,35 @@ enum ImageCropService {
     static func trimTransparentPixels(
         _ image: UIImage,
         alphaThreshold: UInt8 = 24,
-        paddingRatio: CGFloat = 0.04
+        paddingRatio: CGFloat = 0.04,
+        maxScanDimension: Int = 256
     ) -> UIImage? {
         guard let cgImage = image.cgImage else {
             return nil
         }
 
-        let width = cgImage.width
-        let height = cgImage.height
+        let fullWidth = cgImage.width
+        let fullHeight = cgImage.height
+        guard fullWidth > 0, fullHeight > 0 else {
+            return nil
+        }
+
+        // アルファ境界の検出は縮小版で行い、走査ピクセル数とメモリ確保を大幅に削減する。
+        // （元解像度だとスライダー操作のたびに最大数百万ピクセルの走査と十数MBの確保が走る）
+        // 検出した範囲は正規化座標へ直し、トリミング自体は元解像度のcgImageに対して行って画質を保つ。
+        let scanScale = min(1, CGFloat(maxScanDimension) / CGFloat(max(fullWidth, fullHeight)))
+        let scanWidth = max(1, Int((CGFloat(fullWidth) * scanScale).rounded()))
+        let scanHeight = max(1, Int((CGFloat(fullHeight) * scanScale).rounded()))
+
         let bytesPerPixel = 4
-        let bytesPerRow = width * bytesPerPixel
-        let byteCount = height * bytesPerRow
-        var pixels = [UInt8](repeating: 0, count: byteCount)
+        let bytesPerRow = scanWidth * bytesPerPixel
+        var pixels = [UInt8](repeating: 0, count: scanHeight * bytesPerRow)
 
         guard let colorSpace = CGColorSpace(name: CGColorSpace.sRGB),
               let context = CGContext(
                 data: &pixels,
-                width: width,
-                height: height,
+                width: scanWidth,
+                height: scanHeight,
                 bitsPerComponent: 8,
                 bytesPerRow: bytesPerRow,
                 space: colorSpace,
@@ -64,47 +75,50 @@ enum ImageCropService {
             return nil
         }
 
-        context.draw(cgImage, in: CGRect(x: 0, y: 0, width: width, height: height))
+        context.draw(cgImage, in: CGRect(x: 0, y: 0, width: scanWidth, height: scanHeight))
 
-        var minX = width
-        var minY = height
-        var maxX = 0
-        var maxY = 0
-        var foundPixel = false
+        var minX = scanWidth
+        var minY = scanHeight
+        var maxX = -1
+        var maxY = -1
 
-        for y in 0..<height {
-            for x in 0..<width {
-                let alpha = pixels[(y * bytesPerRow) + (x * bytesPerPixel) + 3]
-                guard alpha > alphaThreshold else {
-                    continue
+        pixels.withUnsafeBufferPointer { buffer in
+            for y in 0..<scanHeight {
+                let rowStart = y * bytesPerRow
+                for x in 0..<scanWidth {
+                    let alpha = buffer[rowStart + (x * bytesPerPixel) + 3]
+                    if alpha > alphaThreshold {
+                        if x < minX { minX = x }
+                        if x > maxX { maxX = x }
+                        if y < minY { minY = y }
+                        if y > maxY { maxY = y }
+                    }
                 }
-
-                foundPixel = true
-                minX = min(minX, x)
-                minY = min(minY, y)
-                maxX = max(maxX, x)
-                maxY = max(maxY, y)
             }
         }
 
-        guard foundPixel else {
+        guard maxX >= minX, maxY >= minY else {
             return image
         }
 
-        let padding = Int(CGFloat(max(maxX - minX, maxY - minY)) * paddingRatio)
-        minX = max(0, minX - padding)
-        minY = max(0, minY - padding)
-        maxX = min(width - 1, maxX + padding)
-        maxY = min(height - 1, maxY + padding)
+        // 縮小版の境界を正規化座標へ変換し、余白を加える。座標の対応関係（バッファ座標÷走査サイズ＝
+        // 画像座標÷元サイズ）は元実装と同一なので、向き等の挙動は変えずに高速化のみを行う。
+        let padding = CGFloat(max(maxX - minX, maxY - minY) + 1) * paddingRatio
+        let normalizedRect = CGRect(
+            x: (CGFloat(minX) - padding) / CGFloat(scanWidth),
+            y: (CGFloat(minY) - padding) / CGFloat(scanHeight),
+            width: (CGFloat(maxX - minX + 1) + padding * 2) / CGFloat(scanWidth),
+            height: (CGFloat(maxY - minY + 1) + padding * 2) / CGFloat(scanHeight)
+        ).intersection(CGRect(x: 0, y: 0, width: 1, height: 1))
 
-        let cropRect = CGRect(
-            x: minX,
-            y: minY,
-            width: maxX - minX + 1,
-            height: maxY - minY + 1
-        )
+        let pixelRect = CGRect(
+            x: normalizedRect.minX * CGFloat(fullWidth),
+            y: normalizedRect.minY * CGFloat(fullHeight),
+            width: normalizedRect.width * CGFloat(fullWidth),
+            height: normalizedRect.height * CGFloat(fullHeight)
+        ).integral
 
-        guard let croppedImage = cgImage.cropping(to: cropRect) else {
+        guard let croppedImage = cgImage.cropping(to: pixelRect) else {
             return nil
         }
 
