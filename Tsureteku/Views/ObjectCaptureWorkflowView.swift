@@ -458,11 +458,11 @@ struct ObjectCaptureWorkflowView: View {
     private var trackingLabelText: String {
         switch cameraTracking {
         case .notAvailable:
-            return "認識の準備中"
+            return "追跡の準備中"
         case .normal:
-            return "認識良好"
+            return "追跡良好"
         case .limited:
-            return "認識が不安定"
+            return "追跡が不安定"
         @unknown default:
             return "確認中"
         }
@@ -747,9 +747,9 @@ struct ObjectCaptureWorkflowView: View {
                         isReconstructing = false
                         reconstructionStatus = "キャンセルしました"
 
-                    case .invalidSample(_, let reason):
+                    case .invalidSample:
                         unusableSampleCount += 1
-                        reconstructionStatus = reason
+                        reconstructionStatus = "一部の写真が使えませんでした"
 
                     case .skippedSample:
                         unusableSampleCount += 1

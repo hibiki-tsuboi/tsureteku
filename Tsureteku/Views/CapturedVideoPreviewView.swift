@@ -147,7 +147,7 @@ struct CapturedVideoPreviewView: View {
             switch result {
             case .success:
                 didSave = true
-                statusMessage = "動画に保存しました。"
+                statusMessage = "写真ライブラリに保存しました。"
             case .failure(let error):
                 statusMessage = error.localizedDescription
             }

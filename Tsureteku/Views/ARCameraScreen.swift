@@ -107,7 +107,7 @@ struct ARCameraScreen: View {
         } message: {
             Text("配置した推しがすべて消えます。撮影した写真は残ります。")
         }
-        .alert("録画を開始します", isPresented: $isRecordingConfirmationPresented) {
+        .alert("録画を開始しますか？", isPresented: $isRecordingConfirmationPresented) {
             Button("キャンセル", role: .cancel) {}
             Button("録画開始") {
                 startRecordingAfterConfirmation()
@@ -263,7 +263,7 @@ struct ARCameraScreen: View {
                     WelcomeEmptyState(
                         icon: "teddybear.fill",
                         title: "推しをつれていこう",
-                        message: "お気に入りの推しを登録して、ARで一緒に写真を撮ろう！",
+                        message: "お気に入りの推しを登録すると、ARで一緒に写真が撮れるよ。",
                         actionTitle: "推しを登録",
                         action: { isAddingCharacter = true }
                     )
@@ -822,7 +822,7 @@ struct ARCameraScreen: View {
     private func handlePreviewSave(_ result: Result<Void, Error>) {
         switch result {
         case .success:
-            showStatus("写真に保存しました。")
+            showStatus("写真ライブラリに保存しました。")
         case .failure(let error):
             showStatus(error.localizedDescription)
         }
@@ -831,7 +831,7 @@ struct ARCameraScreen: View {
     private func handleVideoPreviewSave(_ result: Result<Void, Error>) {
         switch result {
         case .success:
-            showStatus("動画に保存しました。")
+            showStatus("写真ライブラリに保存しました。")
         case .failure(let error):
             showStatus(error.localizedDescription)
         }

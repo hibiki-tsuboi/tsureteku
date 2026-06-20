@@ -121,7 +121,7 @@ struct AddCharacterView: View {
                     }
                 }
             }
-            .navigationTitle("推し追加")
+            .navigationTitle("推しを登録")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
