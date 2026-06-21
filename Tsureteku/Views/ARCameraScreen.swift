@@ -403,8 +403,8 @@ struct ARCameraScreen: View {
         .disabled(!isRecordingReadyToStop || isStoppingRecording)
     }
 
-    /// 推し情報・選択・サイズを1枚にまとめたパネル。
-    /// 既定では推し名のバーだけを表示し、タップで推しピッカーとサイズ調整を展開する。
+    /// 推し情報・選択を1枚にまとめたパネル。
+    /// 既定では推し名のバーだけを表示し、タップで推しピッカーを展開する。
     /// 撮影時に画面下半分が隠れないよう、普段は畳んでおける。
     private var controlPanel: some View {
         VStack(spacing: 10) {
@@ -419,7 +419,6 @@ struct ARCameraScreen: View {
 
             if isControlPanelExpanded {
                 characterPicker
-                sizeControl
             }
         }
         .padding(.vertical, 10)
@@ -523,34 +522,6 @@ struct ARCameraScreen: View {
             }
             .padding(.horizontal, 18)
             .contentShape(Rectangle())
-        }
-    }
-
-    @ViewBuilder
-    private var sizeControl: some View {
-        if let selectedCharacter {
-            HStack(spacing: 10) {
-                Image(systemName: selectedCharacter.modelFileName == nil ? "arrow.up.and.down" : "cube")
-                    .foregroundStyle(.secondary)
-
-                Slider(
-                    value: Binding(
-                        get: { selectedCharacter.defaultSizeMeters },
-                        set: { newValue in
-                            selectedCharacter.defaultSizeMeters = newValue
-                            selectedCharacter.updatedAt = Date()
-                            try? modelContext.save()
-                        }
-                    ),
-                    in: 0.12...1.2
-                )
-
-                Text("\(Int(selectedCharacter.defaultSizeMeters * 100))cm")
-                    .font(.caption.monospacedDigit())
-                    .foregroundStyle(.secondary)
-                    .frame(width: 48, alignment: .trailing)
-            }
-            .padding(.horizontal, 18)
         }
     }
 
@@ -686,7 +657,7 @@ struct ARCameraScreen: View {
     private func activateAR() {
         // 撮影プレビューを閉じた後に古い写真状態が残っていても、次回起動時に再表示しない。
         capturedPhoto = nil
-        // AR画面を開くたびに、推しピッカー・サイズ調整をすぐ使えるよう展開しておく。
+        // AR画面を開くたびに、推しピッカーをすぐ使えるよう展開しておく。
         isControlPanelExpanded = true
 
         withAnimation(.easeInOut(duration: 0.25)) {
