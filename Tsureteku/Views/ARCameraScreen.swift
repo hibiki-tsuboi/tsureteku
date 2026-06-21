@@ -197,54 +197,86 @@ struct ARCameraScreen: View {
     }
 
     private var arHeader: some View {
-        HStack {
-            Button {
+        HStack(spacing: 12) {
+            arHeaderButton(
+                systemImage: "xmark",
+                accessibilityLabel: "ARを閉じる"
+            ) {
                 isSelfieMode = false
                 withAnimation(.easeInOut(duration: 0.25)) {
                     isARActive = false
                 }
-            } label: {
-                Image(systemName: "xmark")
-                    .font(.headline)
-                    .frame(width: 42, height: 42)
             }
-            .buttonStyle(.bordered)
-            .clipShape(Circle())
-            .accessibilityLabel("ARを閉じる")
 
             Spacer()
 
             if !characters.isEmpty {
                 if ARFaceTrackingConfiguration.isSupported {
-                    Button {
+                    arHeaderButton(
+                        systemImage: isSelfieMode ? "camera.rotate.fill" : "camera.rotate",
+                        accessibilityLabel: isSelfieMode ? "背面カメラに切り替え" : "自撮りに切り替え",
+                        isActive: isSelfieMode
+                    ) {
                         toggleSelfieMode()
-                    } label: {
-                        Image(systemName: isSelfieMode ? "camera.rotate.fill" : "camera.rotate")
-                            .font(.headline)
-                            .frame(width: 42, height: 42)
                     }
-                    .buttonStyle(.bordered)
-                    .tint(isSelfieMode ? BrandColor.purple : Color.accentColor)
-                    .clipShape(Circle())
-                    .accessibilityLabel(isSelfieMode ? "背面カメラに切り替え" : "自撮りに切り替え")
                 }
 
                 if !isSelfieMode {
-                    Button {
+                    arHeaderButton(
+                        systemImage: "trash",
+                        accessibilityLabel: "配置をリセット",
+                        role: .destructive
+                    ) {
                         isResetConfirmationPresented = true
-                    } label: {
-                        Image(systemName: "trash")
-                            .font(.headline)
-                            .frame(width: 42, height: 42)
                     }
-                    .buttonStyle(.bordered)
-                    .clipShape(Circle())
-                    .accessibilityLabel("配置をリセット")
                 }
             }
         }
+        .frame(maxWidth: .infinity)
         .padding(.horizontal, 18)
         .padding(.top, 12)
+        .padding(.bottom, 24)
+        .background(alignment: .top) {
+            LinearGradient(
+                colors: [
+                    Color.black.opacity(0.5),
+                    Color.black.opacity(0.22),
+                    Color.black.opacity(0)
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .frame(height: 118)
+            .ignoresSafeArea(edges: .top)
+            .allowsHitTesting(false)
+        }
+    }
+
+    private func arHeaderButton(
+        systemImage: String,
+        accessibilityLabel: String,
+        isActive: Bool = false,
+        role: ButtonRole? = nil,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(role: role, action: action) {
+            Image(systemName: systemImage)
+                .font(.headline.weight(.semibold))
+                .foregroundStyle(.white)
+                .frame(width: 44, height: 44)
+                .background {
+                    ZStack {
+                        Circle().fill(.ultraThinMaterial)
+                        Circle().fill((isActive ? BrandColor.purple : Color.black).opacity(isActive ? 0.58 : 0.22))
+                    }
+                }
+                .overlay {
+                    Circle().stroke(.white.opacity(isActive ? 0.72 : 0.42), lineWidth: 1)
+                }
+                .shadow(color: .black.opacity(0.34), radius: 8, y: 3)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(accessibilityLabel)
     }
 
     // MARK: - ランディング（カメラ起動前）
