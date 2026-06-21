@@ -10,6 +10,7 @@ import Combine
 import RealityKit
 import SwiftData
 import SwiftUI
+import UIKit
 import _RealityKit_SwiftUI
 
 struct ObjectCaptureWorkflowView: View {
@@ -19,6 +20,7 @@ struct ObjectCaptureWorkflowView: View {
     var onModelCreated: () -> Void = {}
 
     @StateObject private var sessionStore = ObjectCaptureSessionStore()
+    @StateObject private var finishReadySoundPlayer = FinishReadySoundPlayer()
     @State private var didStartSession = false
     @State private var captureState: ObjectCaptureSession.CaptureState = .initializing
     @State private var feedback: Set<ObjectCaptureSession.Feedback> = []
@@ -38,6 +40,7 @@ struct ObjectCaptureWorkflowView: View {
     @State private var statusMessage: String?
     @State private var didRequestDetection = false
     @State private var didRequestCapture = false
+    @State private var didNotifyMinimumShotsReached = false
     @State private var activeCaptureDirectoryName: String?
     @State private var previousCaptureDirectoryName: String?
 
@@ -130,9 +133,11 @@ struct ObjectCaptureWorkflowView: View {
         .task(id: session.id) {
             let currentSession = session
             numberOfShotsTaken = currentSession.numberOfShotsTaken
+            notifyMinimumShotsReachedIfNeeded(numberOfShotsTaken)
 
             for await numberOfShotsTaken in currentSession.numberOfShotsTakenUpdates {
                 self.numberOfShotsTaken = numberOfShotsTaken
+                notifyMinimumShotsReachedIfNeeded(numberOfShotsTaken)
             }
         }
     }
@@ -277,6 +282,10 @@ struct ObjectCaptureWorkflowView: View {
                 }
             }
 
+            if canFinish {
+                finishReadyBanner
+            }
+
             if case .completed = captureState {
                 Button {
                     reconstructModel()
@@ -300,6 +309,17 @@ struct ObjectCaptureWorkflowView: View {
         .padding(14)
         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 8))
         .controlSize(.large)
+    }
+
+    private var finishReadyBanner: some View {
+        Label("\(minimumShotsForModel)枚撮れました。完了を押せます。", systemImage: "checkmark.circle.fill")
+            .font(.subheadline.weight(.bold))
+            .foregroundStyle(.white)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 12)
+            .background(Color.accentColor, in: RoundedRectangle(cornerRadius: 8))
+            .shadow(color: Color.accentColor.opacity(0.32), radius: 10, y: 4)
     }
 
     @ViewBuilder
@@ -447,8 +467,16 @@ struct ObjectCaptureWorkflowView: View {
         case .ready:
             return "推しだけが大きく映るようにすると認識しやすくなります。"
         case .detecting:
+            if canFinish {
+                return "十分な枚数が撮れました。終わる場合は「完了」を押してください。"
+            }
+
             return "認識できたら「周りを撮影」に進みます。"
         case .capturing:
+            if canFinish {
+                return "十分な枚数が撮れました。必要なら追加で撮影し、終わったら「完了」を押してください。"
+            }
+
             return "\(minimumShotsForModel)枚以上撮ると、3Dモデル作成に進みやすくなります。"
         default:
             return nil
@@ -479,7 +507,7 @@ struct ObjectCaptureWorkflowView: View {
     private var canFinish: Bool {
         switch captureState {
         case .capturing, .detecting:
-            // 3Dモデル作成に必要な枚数（20枚）に満たないうちは完了させない。
+            // 3Dモデル作成に必要な枚数に満たないうちは完了させない。
             canGenerateModel
         default:
             false
@@ -543,6 +571,7 @@ struct ObjectCaptureWorkflowView: View {
         statusMessage = nil
         didRequestDetection = false
         didRequestCapture = false
+        didNotifyMinimumShotsReached = false
         activeCaptureDirectoryName = nil
         previousCaptureDirectoryName = nil
     }
@@ -604,6 +633,8 @@ struct ObjectCaptureWorkflowView: View {
         default:
             break
         }
+
+        notifyMinimumShotsReachedIfNeeded(numberOfShotsTaken)
     }
 
     private func startDetection() {
@@ -633,6 +664,23 @@ struct ObjectCaptureWorkflowView: View {
     private func requestManualCapture() {
         session.requestImageCapture()
         statusMessage = "1枚撮影しました。角度を少し変えて続けてください。"
+    }
+
+    private func notifyMinimumShotsReachedIfNeeded(_ shotsTaken: Int) {
+        guard !didNotifyMinimumShotsReached,
+              shotsTaken >= minimumShotsForModel,
+              canFinish else {
+            return
+        }
+
+        didNotifyMinimumShotsReached = true
+        playFinishReadyFeedback()
+        statusMessage = "\(minimumShotsForModel)枚撮れました。完了ボタンから3Dモデル作成に進めます。"
+    }
+
+    private func playFinishReadyFeedback() {
+        UINotificationFeedbackGenerator().notificationOccurred(.success)
+        finishReadySoundPlayer.play()
     }
 
     private func restorePreviousCaptureDirectoryIfEmpty() {
@@ -878,6 +926,82 @@ private enum CaptureWorkflowStep: Int, CaseIterable, Identifiable {
         case .generate:
             "cube"
         }
+    }
+}
+
+@MainActor
+private final class FinishReadySoundPlayer: ObservableObject {
+    private var audioPlayer: AVAudioPlayer?
+
+    func play() {
+        do {
+            let audioSession = AVAudioSession.sharedInstance()
+            try audioSession.setCategory(.playback, options: [.mixWithOthers])
+            try audioSession.setActive(true)
+
+            let player = try AVAudioPlayer(data: Self.notificationSoundData)
+            player.prepareToPlay()
+            player.play()
+            audioPlayer = player
+        } catch {
+            // 音の再生に失敗しても、ハプティクスと画面上の完了案内はそのまま機能させる。
+        }
+    }
+
+    private static let notificationSoundData: Data = makeNotificationSoundData()
+
+    private static func makeNotificationSoundData() -> Data {
+        let sampleRate = 44_100
+        let duration = 0.26
+        let sampleCount = Int(Double(sampleRate) * duration)
+        let bytesPerSample = 2
+        let dataSize = UInt32(sampleCount * bytesPerSample)
+
+        var data = Data()
+        data.append(contentsOf: "RIFF".utf8)
+        appendUInt32(36 + dataSize, to: &data)
+        data.append(contentsOf: "WAVE".utf8)
+        data.append(contentsOf: "fmt ".utf8)
+        appendUInt32(16, to: &data)
+        appendUInt16(1, to: &data)
+        appendUInt16(1, to: &data)
+        appendUInt32(UInt32(sampleRate), to: &data)
+        appendUInt32(UInt32(sampleRate * bytesPerSample), to: &data)
+        appendUInt16(UInt16(bytesPerSample), to: &data)
+        appendUInt16(UInt16(8 * bytesPerSample), to: &data)
+        data.append(contentsOf: "data".utf8)
+        appendUInt32(dataSize, to: &data)
+
+        for index in 0..<sampleCount {
+            let time = Double(index) / Double(sampleRate)
+            let frequency = time < 0.13 ? 880.0 : 1_176.0
+            let envelope = amplitudeEnvelope(time: time, duration: duration)
+            let sample = sin(2 * Double.pi * frequency * time) * 0.38 * envelope
+            appendInt16(Int16(sample * Double(Int16.max)), to: &data)
+        }
+
+        return data
+    }
+
+    private static func amplitudeEnvelope(time: Double, duration: Double) -> Double {
+        let attack = min(time / 0.015, 1)
+        let release = min((duration - time) / 0.055, 1)
+        return max(0, min(attack, release))
+    }
+
+    private static func appendUInt16(_ value: UInt16, to data: inout Data) {
+        var littleEndian = value.littleEndian
+        withUnsafeBytes(of: &littleEndian) { data.append(contentsOf: $0) }
+    }
+
+    private static func appendUInt32(_ value: UInt32, to data: inout Data) {
+        var littleEndian = value.littleEndian
+        withUnsafeBytes(of: &littleEndian) { data.append(contentsOf: $0) }
+    }
+
+    private static func appendInt16(_ value: Int16, to data: inout Data) {
+        var littleEndian = value.littleEndian
+        withUnsafeBytes(of: &littleEndian) { data.append(contentsOf: $0) }
     }
 }
 
