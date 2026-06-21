@@ -20,6 +20,7 @@ struct CharacterARAsset: Equatable {
     let cutoutImageFileName: String
     let modelFileName: String?
     let defaultSizeMeters: Float
+    let arBrightnessMultiplier: Float
     let modelYawDegrees: Float
     let modelVerticalOffsetMeters: Float
 }
@@ -84,6 +85,7 @@ struct ARCharacterView: UIViewRepresentable {
         context.coordinator.isSceneEmpty = $isSceneEmpty
         context.coordinator.isCoachingActive = $isCoachingActive
         context.coordinator.isRecording = isRecording
+        context.coordinator.updateSceneLighting(in: arView)
         context.coordinator.updateSelfieMode(isSelfieMode, in: arView)
 
         if captureTrigger != context.coordinator.lastCaptureTrigger {
@@ -211,7 +213,7 @@ struct ARCharacterView: UIViewRepresentable {
         private var isPlacing = false
         private var placementTask: Task<Void, Never>?
         private weak var coachingOverlay: ARCoachingOverlayView?
-        private var selfieAssetID: UUID?
+        private var selfieRenderedAsset: CharacterARAsset?
         private var selfieSize: Float?
         private var selfieScaleDivisor: Float = 1
         private var selfieUnscaledHeight: Float = 1
@@ -259,7 +261,7 @@ struct ARCharacterView: UIViewRepresentable {
             arView.renderOptions.remove(.disableGroundingShadows)
 
             // 暗い室内でも推し（3Dモデル）が暗く沈まないよう、環境光をやや明るめに底上げする。
-            arView.environment.lighting.intensityExponent = Self.modelLightingIntensityExponent
+            updateSceneLighting(in: arView)
 
             let tapGesture = UITapGestureRecognizer(target: self, action: #selector(handleTap(_:)))
             arView.addGestureRecognizer(tapGesture)
@@ -318,7 +320,7 @@ struct ARCharacterView: UIViewRepresentable {
             if selfie != isSelfieMode {
                 isSelfieMode = selfie
                 removeAllPlacements(in: arView)
-                selfieAssetID = nil
+                selfieRenderedAsset = nil
                 selfieSize = nil
 
                 if selfie {
@@ -378,19 +380,23 @@ struct ARCharacterView: UIViewRepresentable {
 
             guard let asset = selectedAsset else {
                 removeAllPlacements(in: arView)
-                selfieAssetID = nil
+                selfieRenderedAsset = nil
                 selfieSize = nil
                 return
             }
 
-            // 同じ推しならサイズ変更だけ反映して作り直さない。
-            if asset.id == selfieAssetID {
+            updateSceneLighting(in: arView)
+
+            // 見た目に関わる設定が同じなら、サイズ変更だけ反映して作り直さない。
+            if let selfieRenderedAsset,
+               isSameRenderableSelfieAsset(asset, selfieRenderedAsset) {
                 if selfieSize != asset.defaultSizeMeters, let placement = placements.first {
                     let scale = asset.defaultSizeMeters / selfieScaleDivisor
                     placement.entity.scale = SIMD3<Float>(repeating: scale)
                     placement.entity.position = selfiePosition(scaledHeight: selfieUnscaledHeight * scale)
                     selfieSize = asset.defaultSizeMeters
                 }
+                self.selfieRenderedAsset = asset
                 return
             }
 
@@ -400,11 +406,20 @@ struct ARCharacterView: UIViewRepresentable {
                 let placement = try placeSelfieCharacter(asset, in: arView)
                 placements.append(placement)
                 selectPlacement(placement)
-                selfieAssetID = asset.id
+                selfieRenderedAsset = asset
                 selfieSize = asset.defaultSizeMeters
             } catch {
                 onStatus(error.localizedDescription)
             }
+        }
+
+        private func isSameRenderableSelfieAsset(_ lhs: CharacterARAsset, _ rhs: CharacterARAsset) -> Bool {
+            lhs.id == rhs.id &&
+                lhs.cutoutImageFileName == rhs.cutoutImageFileName &&
+                lhs.modelFileName == rhs.modelFileName &&
+                lhs.arBrightnessMultiplier == rhs.arBrightnessMultiplier &&
+                lhs.modelYawDegrees == rhs.modelYawDegrees &&
+                lhs.modelVerticalOffsetMeters == rhs.modelVerticalOffsetMeters
         }
 
         private func placeSelfieCharacter(_ asset: CharacterARAsset, in arView: ARView) throws -> PlacedCharacter {
@@ -430,7 +445,11 @@ struct ARCharacterView: UIViewRepresentable {
                 entity = container
             } else {
                 let imageURL = try CharacterImageStore.url(for: asset.cutoutImageFileName, kind: .cutout)
-                let texture = try brightenedColorTexture(contentsOf: imageURL, name: asset.id.uuidString)
+                let texture = try brightenedColorTexture(
+                    contentsOf: imageURL,
+                    name: asset.id.uuidString,
+                    brightnessMultiplier: asset.arBrightnessMultiplier
+                )
 
                 let aspectRatio = max(0.25, min(4.0, Float(texture.width) / Float(max(texture.height, 1))))
                 let mesh = MeshResource.generatePlane(width: aspectRatio, height: 1.0)
@@ -660,6 +679,8 @@ struct ARCharacterView: UIViewRepresentable {
             in arView: ARView,
             completion: @escaping (Result<PlacedCharacter, Error>) -> Void
         ) {
+            applySceneLighting(for: asset, in: arView)
+
             if let modelFileName = asset.modelFileName {
                 placeModel(asset, modelFileName: modelFileName, at: result, in: arView, completion: completion)
             } else {
@@ -754,7 +775,11 @@ struct ARCharacterView: UIViewRepresentable {
 
         private func placeCutout(_ asset: CharacterARAsset, at result: ARRaycastResult, in arView: ARView) throws -> PlacedCharacter {
             let imageURL = try CharacterImageStore.url(for: asset.cutoutImageFileName, kind: .cutout)
-            let texture = try brightenedColorTexture(contentsOf: imageURL, name: asset.id.uuidString)
+            let texture = try brightenedColorTexture(
+                contentsOf: imageURL,
+                name: asset.id.uuidString,
+                brightnessMultiplier: asset.arBrightnessMultiplier
+            )
 
             let aspectRatio = max(0.25, min(4.0, Float(texture.width) / Float(max(texture.height, 1))))
             let height = asset.defaultSizeMeters
@@ -979,17 +1004,36 @@ struct ARCharacterView: UIViewRepresentable {
 
         // MARK: - 明るさ補正
 
-        /// 3Dモデルに当たる環境光の強さ（指数）。1.0が等倍で、大きいほど明るい。
-        private static let modelLightingIntensityExponent: Float = 1.6
-        /// 写真切り抜きの推しを持ち上げる露出補正値（EV）。0で無補正。
-        private static let cutoutExposureBoost: Float = 0.6
+        /// 推し詳細の「明るさ」が100%の時に使う3Dモデル向け環境光の強さ。
+        private static let baseModelLightingIntensityExponent: Float = 1.9
+        /// 推し詳細の「明るさ」が100%の時に使う写真切り抜き向け露出補正値（EV）。
+        private static let baseCutoutExposureBoost: Float = 0.8
+        private static let brightnessMultiplierRange: ClosedRange<Float> = 0.6...1.6
         private static let imageContext = CIContext()
 
-        /// 切り抜き画像を露出補正してからテクスチャ化する。補正に失敗した場合は元画像をそのまま読み込む。
-        private func brightenedColorTexture(contentsOf url: URL, name: String) throws -> TextureResource {
-            let options = TextureResource.CreateOptions(semantic: .color, mipmapsMode: .allocateAndGenerateAll)
+        func updateSceneLighting(in arView: ARView) {
+            applySceneLighting(for: selectedAsset, in: arView)
+        }
 
-            guard Self.cutoutExposureBoost != 0,
+        private func applySceneLighting(for asset: CharacterARAsset?, in arView: ARView) {
+            let multiplier = Self.normalizedBrightnessMultiplier(asset?.arBrightnessMultiplier ?? 1)
+            arView.environment.lighting.intensityExponent = Self.baseModelLightingIntensityExponent * multiplier
+        }
+
+        private static func normalizedBrightnessMultiplier(_ multiplier: Float) -> Float {
+            min(max(multiplier, brightnessMultiplierRange.lowerBound), brightnessMultiplierRange.upperBound)
+        }
+
+        /// 切り抜き画像を露出補正してからテクスチャ化する。補正に失敗した場合は元画像をそのまま読み込む。
+        private func brightenedColorTexture(
+            contentsOf url: URL,
+            name: String,
+            brightnessMultiplier: Float
+        ) throws -> TextureResource {
+            let options = TextureResource.CreateOptions(semantic: .color, mipmapsMode: .allocateAndGenerateAll)
+            let exposureBoost = Self.baseCutoutExposureBoost * Self.normalizedBrightnessMultiplier(brightnessMultiplier)
+
+            guard exposureBoost != 0,
                   let source = UIImage(contentsOfFile: url.path)?.cgImage else {
                 return try TextureResource.load(contentsOf: url, withName: name, options: options)
             }
@@ -997,7 +1041,7 @@ struct ARCharacterView: UIViewRepresentable {
             let ciImage = CIImage(cgImage: source)
             let filter = CIFilter.exposureAdjust()
             filter.inputImage = ciImage
-            filter.ev = Self.cutoutExposureBoost
+            filter.ev = exposureBoost
 
             guard let output = filter.outputImage,
                   let adjusted = Self.imageContext.createCGImage(output, from: ciImage.extent) else {

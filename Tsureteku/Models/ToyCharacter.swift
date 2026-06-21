@@ -10,6 +10,8 @@ import SwiftData
 
 @Model
 final class ToyCharacter {
+    static let arBrightnessMultiplierRange: ClosedRange<Double> = 0.6...1.6
+
     var id: UUID
     var name: String
     var originalImageFileName: String
@@ -17,11 +19,20 @@ final class ToyCharacter {
     var modelFileName: String? = nil
     var objectCaptureDirectoryName: String? = nil
     var defaultSizeMeters: Double = 0.34
+    var arBrightnessMultiplier: Double = 1.0
     var modelYawDegrees: Double = 0
     var modelVerticalOffsetMeters: Double = 0
     var createdAt: Date
     var updatedAt: Date
     var lastUsedAt: Date?
+
+    var normalizedARBrightnessMultiplier: Double {
+        let multiplier = arBrightnessMultiplier > 0 ? arBrightnessMultiplier : 1
+        return min(
+            max(multiplier, Self.arBrightnessMultiplierRange.lowerBound),
+            Self.arBrightnessMultiplierRange.upperBound
+        )
+    }
 
     init(
         id: UUID = UUID(),
@@ -31,6 +42,7 @@ final class ToyCharacter {
         modelFileName: String? = nil,
         objectCaptureDirectoryName: String? = nil,
         defaultSizeMeters: Double = 0.34,
+        arBrightnessMultiplier: Double = 1.0,
         modelYawDegrees: Double = 0,
         modelVerticalOffsetMeters: Double = 0,
         createdAt: Date = Date(),
@@ -44,6 +56,7 @@ final class ToyCharacter {
         self.modelFileName = modelFileName
         self.objectCaptureDirectoryName = objectCaptureDirectoryName
         self.defaultSizeMeters = defaultSizeMeters
+        self.arBrightnessMultiplier = arBrightnessMultiplier
         self.modelYawDegrees = modelYawDegrees
         self.modelVerticalOffsetMeters = modelVerticalOffsetMeters
         self.createdAt = createdAt

@@ -54,7 +54,7 @@ struct CharacterDetailView: View {
                     .foregroundStyle(.secondary)
             }
 
-            Section("AR") {
+            Section {
                 HStack {
                     Text("初期サイズ")
                     Slider(value: $character.defaultSizeMeters, in: 0.12...1.2)
@@ -67,6 +67,27 @@ struct CharacterDetailView: View {
                         .foregroundStyle(.secondary)
                         .frame(width: 48, alignment: .trailing)
                 }
+
+                HStack {
+                    Text("明るさ")
+                    Slider(
+                        value: $character.arBrightnessMultiplier,
+                        in: ToyCharacter.arBrightnessMultiplierRange,
+                        step: 0.05
+                    )
+                        .onChange(of: character.arBrightnessMultiplier) { _, _ in
+                            save()
+                        }
+
+                    Text("\(Int((character.normalizedARBrightnessMultiplier * 100).rounded()))%")
+                        .font(.caption.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                        .frame(width: 48, alignment: .trailing)
+                }
+            } header: {
+                Text("AR")
+            } footer: {
+                Text("ARで配置した時の推しの明るさを調整します。")
             }
 
             Section("3Dモデル") {
@@ -163,6 +184,7 @@ struct CharacterDetailView: View {
                 ObjectCapturePreparationView(character: character)
             }
         }
+        .onAppear(perform: normalizeARBrightnessIfNeeded)
     }
 
     private func shareModel() {
@@ -217,6 +239,15 @@ struct CharacterDetailView: View {
     private func save() {
         character.updatedAt = Date()
         try? modelContext.save()
+    }
+
+    private func normalizeARBrightnessIfNeeded() {
+        guard character.arBrightnessMultiplier != character.normalizedARBrightnessMultiplier else {
+            return
+        }
+
+        character.arBrightnessMultiplier = 1
+        save()
     }
 }
 
