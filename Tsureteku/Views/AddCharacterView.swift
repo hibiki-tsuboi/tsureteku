@@ -20,8 +20,6 @@ struct AddCharacterView: View {
     @State private var characterName = ""
     @State private var sourceImage: UIImage?
     @State private var cutoutImage: UIImage?
-    /// 自動切り抜き直後の（境界・余白で削る前の）元画像。スライダー調整はこれを基準にトリミングする。
-    @State private var baseCutoutImage: UIImage?
     @State private var isProcessing = false
     @State private var errorMessage: String?
     /// 自動切り抜きに失敗したなど、保存自体はできる注意喚起。エラーと区別して控えめに表示する。
@@ -29,8 +27,6 @@ struct AddCharacterView: View {
     @State private var selectedPhotoItem: PhotosPickerItem?
     @State private var isCameraPresented = false
     @State private var isManualTrimPresented = false
-    @State private var alphaThreshold = 0.1
-    @State private var trimPadding = 0.04
     @State private var defaultSizeMeters = 0.34
     @State private var activeProcessingID: UUID?
 
@@ -97,9 +93,7 @@ struct AddCharacterView: View {
             .sheet(isPresented: $isManualTrimPresented) {
                 if let cutoutImage {
                     ManualTrimView(image: cutoutImage) { trimmedImage in
-                        // 手動トリミング後の画像を以降のスライダー調整の基準にし、手動結果が失われないようにする。
                         self.cutoutImage = trimmedImage
-                        self.baseCutoutImage = trimmedImage
                     }
                 }
             }
@@ -118,9 +112,6 @@ struct AddCharacterView: View {
                     warningMessage = nil
                     errorMessage = nil
                 }
-            }
-            .task(id: CutoutTrimSettings(alphaThreshold: alphaThreshold, paddingRatio: trimPadding)) {
-                await retrimCutout()
             }
             .onDisappear {
                 activeProcessingID = nil
@@ -155,26 +146,11 @@ struct AddCharacterView: View {
 
         if cutoutImage != nil {
             Section {
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack {
-                        Text("切り抜きの強さ")
-                        Spacer()
-                        Text(alphaThreshold, format: .percent.precision(.fractionLength(0)))
-                            .font(.caption.monospacedDigit())
-                            .foregroundStyle(.secondary)
-                    }
-                    Slider(value: $alphaThreshold, in: 0...0.45)
-                }
-
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack {
-                        Text("まわりの余白")
-                        Spacer()
-                        Text(trimPadding, format: .percent.precision(.fractionLength(0)))
-                            .font(.caption.monospacedDigit())
-                            .foregroundStyle(.secondary)
-                    }
-                    Slider(value: $trimPadding, in: 0...0.18)
+                Label {
+                    Text(warningMessage == nil ? "自動切り抜き済み" : "写真を読み込み済み")
+                } icon: {
+                    Image(systemName: warningMessage == nil ? "checkmark.circle.fill" : "photo")
+                        .foregroundStyle(warningMessage == nil ? .green : .secondary)
                 }
 
                 Button {
@@ -186,7 +162,7 @@ struct AddCharacterView: View {
             } header: {
                 Text("切り抜き")
             } footer: {
-                Text("「切り抜きの強さ」「まわりの余白」を動かすと、切り抜き範囲がすぐに変わります。")
+                Text("背景や余白が気になる時だけ手動で範囲を調整できます。問題なければそのまま保存できます。")
             }
 
             arSizeSection
@@ -311,7 +287,6 @@ struct AddCharacterView: View {
 
                 sourceImage = result.sourceImage
                 cutoutImage = result.cutoutImage
-                baseCutoutImage = result.cutoutImage
                 warningMessage = result.warningMessage
 
                 fillDefaultNameIfNeeded()
@@ -319,44 +294,6 @@ struct AddCharacterView: View {
                 isProcessing = false
                 activeProcessingID = nil
             }
-        }
-    }
-
-    /// 境界・余白スライダーの変更を、自動切り抜き直後の画像（baseCutoutImage）を基準に
-    /// その場でトリミングし直してプレビューへ即時反映する。
-    /// `.task(id:)` がスライダー値の変化ごとに前回分を自動キャンセルするため、
-    /// 先頭で少し待つことで連続操作中の無駄な再計算を抑える（簡易デバウンス）。
-    private func retrimCutout() async {
-        guard let baseCutoutImage else {
-            return
-        }
-
-        try? await Task.sleep(for: .milliseconds(220))
-        if Task.isCancelled {
-            return
-        }
-
-        let alphaThreshold = UInt8(alphaThreshold * 255)
-        let paddingRatio = trimPadding
-
-        let trimmedImage = await withCheckedContinuation { continuation in
-            DispatchQueue.global(qos: .userInitiated).async {
-                continuation.resume(
-                    returning: ImageCropService.trimTransparentPixels(
-                        baseCutoutImage,
-                        alphaThreshold: alphaThreshold,
-                        paddingRatio: paddingRatio
-                    )
-                )
-            }
-        }
-
-        if Task.isCancelled {
-            return
-        }
-
-        if let trimmedImage {
-            cutoutImage = trimmedImage
         }
     }
 
@@ -466,12 +403,6 @@ private enum CharacterImageProcessor {
         }
     }
 
-}
-
-/// 境界・余白スライダーの値。`.task(id:)` の識別子に使い、変化したときだけ再トリミングを走らせる。
-private struct CutoutTrimSettings: Equatable {
-    let alphaThreshold: Double
-    let paddingRatio: Double
 }
 
 private struct CharacterImageProcessingResult {

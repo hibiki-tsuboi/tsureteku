@@ -17,7 +17,6 @@ struct EditCharacterImageView: View {
 
     @State private var sourceImage: UIImage?
     @State private var cutoutImage: UIImage?
-    @State private var baseCutoutImage: UIImage?
     @State private var currentCutoutImage: UIImage?
     @State private var isProcessing = false
     @State private var errorMessage: String?
@@ -25,8 +24,6 @@ struct EditCharacterImageView: View {
     @State private var selectedPhotoItem: PhotosPickerItem?
     @State private var isCameraPresented = false
     @State private var isManualTrimPresented = false
-    @State private var alphaThreshold = 0.1
-    @State private var trimPadding = 0.04
     @State private var activeProcessingID: UUID?
 
     var body: some View {
@@ -57,26 +54,11 @@ struct EditCharacterImageView: View {
 
                 if cutoutImage != nil {
                     Section {
-                        VStack(alignment: .leading, spacing: 4) {
-                            HStack {
-                                Text("切り抜きの強さ")
-                                Spacer()
-                                Text(alphaThreshold, format: .percent.precision(.fractionLength(0)))
-                                    .font(.caption.monospacedDigit())
-                                    .foregroundStyle(.secondary)
-                            }
-                            Slider(value: $alphaThreshold, in: 0...0.45)
-                        }
-
-                        VStack(alignment: .leading, spacing: 4) {
-                            HStack {
-                                Text("まわりの余白")
-                                Spacer()
-                                Text(trimPadding, format: .percent.precision(.fractionLength(0)))
-                                    .font(.caption.monospacedDigit())
-                                    .foregroundStyle(.secondary)
-                            }
-                            Slider(value: $trimPadding, in: 0...0.18)
+                        Label {
+                            Text(warningMessage == nil ? "自動切り抜き済み" : "写真を読み込み済み")
+                        } icon: {
+                            Image(systemName: warningMessage == nil ? "checkmark.circle.fill" : "photo")
+                                .foregroundStyle(warningMessage == nil ? .green : .secondary)
                         }
 
                         Button {
@@ -88,7 +70,7 @@ struct EditCharacterImageView: View {
                     } header: {
                         Text("切り抜き")
                     } footer: {
-                        Text("保存すると、一覧や推し選択で使う画像だけが差し替わります。3Dモデルは変更されません。")
+                        Text("背景や余白が気になる時だけ手動で範囲を調整できます。保存しても3Dモデルは変更されません。")
                     }
                 }
 
@@ -131,7 +113,6 @@ struct EditCharacterImageView: View {
                 if let cutoutImage {
                     ManualTrimView(image: cutoutImage) { trimmedImage in
                         self.cutoutImage = trimmedImage
-                        self.baseCutoutImage = trimmedImage
                     }
                 }
             }
@@ -144,9 +125,6 @@ struct EditCharacterImageView: View {
                 Task {
                     await loadPhotoItem(newItem)
                 }
-            }
-            .task(id: CharacterImageTrimSettings(alphaThreshold: alphaThreshold, paddingRatio: trimPadding)) {
-                await retrimCutout()
             }
             .onDisappear {
                 activeProcessingID = nil
@@ -226,7 +204,6 @@ struct EditCharacterImageView: View {
         warningMessage = nil
         sourceImage = nil
         cutoutImage = nil
-        baseCutoutImage = nil
 
         DispatchQueue.global(qos: .userInitiated).async {
             let result = ReplacementCharacterImageProcessor.process(image)
@@ -238,45 +215,10 @@ struct EditCharacterImageView: View {
 
                 sourceImage = result.sourceImage
                 cutoutImage = result.cutoutImage
-                baseCutoutImage = result.cutoutImage
                 warningMessage = result.warningMessage
                 isProcessing = false
                 activeProcessingID = nil
             }
-        }
-    }
-
-    private func retrimCutout() async {
-        guard let baseCutoutImage else {
-            return
-        }
-
-        try? await Task.sleep(for: .milliseconds(220))
-        if Task.isCancelled {
-            return
-        }
-
-        let alphaThreshold = UInt8(alphaThreshold * 255)
-        let paddingRatio = trimPadding
-
-        let trimmedImage = await withCheckedContinuation { continuation in
-            DispatchQueue.global(qos: .userInitiated).async {
-                continuation.resume(
-                    returning: ImageCropService.trimTransparentPixels(
-                        baseCutoutImage,
-                        alphaThreshold: alphaThreshold,
-                        paddingRatio: paddingRatio
-                    )
-                )
-            }
-        }
-
-        if Task.isCancelled {
-            return
-        }
-
-        if let trimmedImage {
-            cutoutImage = trimmedImage
         }
     }
 
@@ -342,11 +284,6 @@ private enum ReplacementCharacterImageProcessor {
             )
         }
     }
-}
-
-private struct CharacterImageTrimSettings: Equatable {
-    let alphaThreshold: Double
-    let paddingRatio: Double
 }
 
 private struct ReplacementCharacterImageProcessingResult {
