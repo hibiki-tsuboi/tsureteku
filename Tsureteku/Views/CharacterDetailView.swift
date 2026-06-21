@@ -16,6 +16,7 @@ struct CharacterDetailView: View {
     @Bindable var character: ToyCharacter
 
     @State private var isImportingModel = false
+    @State private var isEditingImage = false
     @State private var isModelDeleteConfirmationPresented = false
     @State private var isCaptureFlowPresented = false
     @State private var shareableModel: ShareableModel?
@@ -39,6 +40,18 @@ struct CharacterDetailView: View {
                     }
                 }
                 .padding(.vertical, 6)
+            }
+
+            Section("2D画像") {
+                Button {
+                    isEditingImage = true
+                } label: {
+                    Label("画像を撮り直す・選ぶ", systemImage: "photo.on.rectangle")
+                }
+
+                Label("一覧や推し選択で使う画像を変更できます。3Dモデルはそのままです。", systemImage: "info.circle")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
 
             Section("AR") {
@@ -139,6 +152,9 @@ struct CharacterDetailView: View {
         }
         .sheet(item: $shareableModel) { model in
             ModelShareSheet(url: model.url)
+        }
+        .sheet(isPresented: $isEditingImage) {
+            EditCharacterImageView(character: character)
         }
         .fullScreenCover(isPresented: $isCaptureFlowPresented) {
             // 3D撮影フローはモーダルで開く。完成時の dismiss がモーダル境界をまたいで
