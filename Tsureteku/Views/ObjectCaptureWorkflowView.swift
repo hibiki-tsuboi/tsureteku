@@ -18,6 +18,8 @@ struct ObjectCaptureWorkflowView: View {
     @Bindable var character: ToyCharacter
     /// 3Dモデルの作成に成功したときに呼ばれる。撮影フローを閉じて詳細画面へ戻すために使う。
     var onModelCreated: () -> Void = {}
+    /// 3Dモデルを保存せずに撮影フローを離れたときの後始末に使う。
+    var onFlowDiscarded: () -> Void = {}
 
     @StateObject private var sessionStore = ObjectCaptureSessionStore()
     @StateObject private var finishReadySoundPlayer = FinishReadySoundPlayer()
@@ -93,6 +95,7 @@ struct ObjectCaptureWorkflowView: View {
             if !isReconstructing {
                 session.cancel()
                 restorePreviousCaptureDirectoryIfEmpty()
+                onFlowDiscarded()
             }
         }
         .task(id: session.id) {

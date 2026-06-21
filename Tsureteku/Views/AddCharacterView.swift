@@ -6,6 +6,7 @@
 //
 
 import PhotosUI
+import RealityKit
 import SwiftData
 import SwiftUI
 import UIKit
@@ -15,6 +16,7 @@ struct AddCharacterView: View {
     @Environment(\.modelContext) private var modelContext
     @Query private var existingCharacters: [ToyCharacter]
 
+    @State private var registrationMode: CharacterRegistrationMode = .photo
     @State private var characterName = ""
     @State private var sourceImage: UIImage?
     @State private var cutoutImage: UIImage?
@@ -35,79 +37,24 @@ struct AddCharacterView: View {
     var body: some View {
         NavigationStack {
             Form {
+                Section("登録方法") {
+                    Picker("登録方法", selection: $registrationMode) {
+                        ForEach(CharacterRegistrationMode.allCases) { mode in
+                            Text(mode.title).tag(mode)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                }
+
                 Section {
                     TextField("名前", text: $characterName)
                 }
 
-                Section {
-                    VStack(spacing: 14) {
-                        preview
-
-                        HStack(spacing: 12) {
-                            Button {
-                                isCameraPresented = true
-                            } label: {
-                                Label("撮影", systemImage: "camera")
-                                    .frame(maxWidth: .infinity)
-                            }
-                            .buttonStyle(.bordered)
-
-                            PhotosPicker(selection: $selectedPhotoItem, matching: .images) {
-                                Label("選択", systemImage: "photo")
-                                    .frame(maxWidth: .infinity)
-                            }
-                            .buttonStyle(.bordered)
-                        }
-                    }
-                    .padding(.vertical, 8)
-                }
-
-                if cutoutImage != nil {
-                    Section {
-                        VStack(alignment: .leading, spacing: 4) {
-                            HStack {
-                                Text("切り抜きの強さ")
-                                Spacer()
-                                Text(alphaThreshold, format: .percent.precision(.fractionLength(0)))
-                                    .font(.caption.monospacedDigit())
-                                    .foregroundStyle(.secondary)
-                            }
-                            Slider(value: $alphaThreshold, in: 0...0.45)
-                        }
-
-                        VStack(alignment: .leading, spacing: 4) {
-                            HStack {
-                                Text("まわりの余白")
-                                Spacer()
-                                Text(trimPadding, format: .percent.precision(.fractionLength(0)))
-                                    .font(.caption.monospacedDigit())
-                                    .foregroundStyle(.secondary)
-                            }
-                            Slider(value: $trimPadding, in: 0...0.18)
-                        }
-
-                        Button {
-                            isManualTrimPresented = true
-                        } label: {
-                            Label("手動トリミング", systemImage: "crop")
-                        }
-                        .disabled(isProcessing)
-                    } header: {
-                        Text("切り抜き")
-                    } footer: {
-                        Text("「切り抜きの強さ」「まわりの余白」を動かすと、切り抜き範囲がすぐに変わります。")
-                    }
-
-                    Section("AR") {
-                        HStack {
-                            Text("初期サイズ")
-                            Slider(value: $defaultSizeMeters, in: 0.12...1.2)
-                            Text("\(Int(defaultSizeMeters * 100))cm")
-                                .font(.caption.monospacedDigit())
-                                .foregroundStyle(.secondary)
-                                .frame(width: 48, alignment: .trailing)
-                        }
-                    }
+                switch registrationMode {
+                case .photo:
+                    photoRegistrationContent
+                case .objectCapture:
+                    objectCaptureRegistrationContent
                 }
 
                 if let warningMessage {
@@ -135,8 +82,10 @@ struct AddCharacterView: View {
                 }
 
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("保存", action: saveCharacter)
-                        .disabled(!canSave || isProcessing)
+                    if registrationMode == .photo {
+                        Button("保存", action: saveCharacter)
+                            .disabled(!canSave || isProcessing)
+                    }
                 }
             }
             .fullScreenCover(isPresented: $isCameraPresented) {
@@ -163,11 +112,128 @@ struct AddCharacterView: View {
                     await loadPhotoItem(newItem)
                 }
             }
+            .onChange(of: registrationMode) { _, newMode in
+                if newMode == .objectCapture {
+                    fillDefaultNameIfNeeded()
+                    warningMessage = nil
+                    errorMessage = nil
+                }
+            }
             .task(id: CutoutTrimSettings(alphaThreshold: alphaThreshold, paddingRatio: trimPadding)) {
                 await retrimCutout()
             }
             .onDisappear {
                 activeProcessingID = nil
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var photoRegistrationContent: some View {
+        Section {
+            VStack(spacing: 14) {
+                preview
+
+                HStack(spacing: 12) {
+                    Button {
+                        isCameraPresented = true
+                    } label: {
+                        Label("撮影", systemImage: "camera")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.bordered)
+
+                    PhotosPicker(selection: $selectedPhotoItem, matching: .images) {
+                        Label("選択", systemImage: "photo")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.bordered)
+                }
+            }
+            .padding(.vertical, 8)
+        }
+
+        if cutoutImage != nil {
+            Section {
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack {
+                        Text("切り抜きの強さ")
+                        Spacer()
+                        Text(alphaThreshold, format: .percent.precision(.fractionLength(0)))
+                            .font(.caption.monospacedDigit())
+                            .foregroundStyle(.secondary)
+                    }
+                    Slider(value: $alphaThreshold, in: 0...0.45)
+                }
+
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack {
+                        Text("まわりの余白")
+                        Spacer()
+                        Text(trimPadding, format: .percent.precision(.fractionLength(0)))
+                            .font(.caption.monospacedDigit())
+                            .foregroundStyle(.secondary)
+                    }
+                    Slider(value: $trimPadding, in: 0...0.18)
+                }
+
+                Button {
+                    isManualTrimPresented = true
+                } label: {
+                    Label("手動トリミング", systemImage: "crop")
+                }
+                .disabled(isProcessing)
+            } header: {
+                Text("切り抜き")
+            } footer: {
+                Text("「切り抜きの強さ」「まわりの余白」を動かすと、切り抜き範囲がすぐに変わります。")
+            }
+
+            arSizeSection
+        }
+    }
+
+    @ViewBuilder
+    private var objectCaptureRegistrationContent: some View {
+        Section {
+            NavigationLink {
+                NewObjectCaptureCharacterView(
+                    characterName: trimmedCharacterName,
+                    defaultSizeMeters: defaultSizeMeters,
+                    onCharacterCreated: { dismiss() }
+                )
+            } label: {
+                Label("3D撮影の準備へ", systemImage: "camera.aperture")
+            }
+            .disabled(!canStartObjectCaptureRegistration || !ObjectCaptureSession.isSupported)
+
+            if ObjectCaptureSession.isSupported {
+                Label("写真登録なしで、3D撮影から推しを作成します。", systemImage: "cube.fill")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            } else {
+                Label("この端末では3D撮影を利用できません。", systemImage: "iphone.slash")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            }
+        } footer: {
+            if !canStartObjectCaptureRegistration {
+                Text("名前を入力すると3D撮影へ進めます。")
+            }
+        }
+
+        arSizeSection
+    }
+
+    private var arSizeSection: some View {
+        Section("AR") {
+            HStack {
+                Text("初期サイズ")
+                Slider(value: $defaultSizeMeters, in: 0.12...1.2)
+                Text("\(Int(defaultSizeMeters * 100))cm")
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(.secondary)
+                    .frame(width: 48, alignment: .trailing)
             }
         }
     }
@@ -202,6 +268,14 @@ struct AddCharacterView: View {
 
     private var canSave: Bool {
         cutoutImage != nil && sourceImage != nil && !characterName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private var canStartObjectCaptureRegistration: Bool {
+        !trimmedCharacterName.isEmpty
+    }
+
+    private var trimmedCharacterName: String {
+        characterName.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     private func loadPhotoItem(_ item: PhotosPickerItem) async {
@@ -240,9 +314,7 @@ struct AddCharacterView: View {
                 baseCutoutImage = result.cutoutImage
                 warningMessage = result.warningMessage
 
-                if characterName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                    characterName = defaultCharacterName()
-                }
+                fillDefaultNameIfNeeded()
 
                 isProcessing = false
                 activeProcessingID = nil
@@ -305,6 +377,12 @@ struct AddCharacterView: View {
         return "\(baseName) \(index)"
     }
 
+    private func fillDefaultNameIfNeeded() {
+        if trimmedCharacterName.isEmpty {
+            characterName = defaultCharacterName()
+        }
+    }
+
     private func saveCharacter() {
         guard let sourceImage, let cutoutImage else {
             return
@@ -346,6 +424,24 @@ struct AddCharacterView: View {
                 CharacterImageStore.deleteIfExists(fileName: savedCutoutFileName, kind: .cutout)
             }
             errorMessage = error.localizedDescription
+        }
+    }
+}
+
+private enum CharacterRegistrationMode: String, CaseIterable, Identifiable {
+    case photo
+    case objectCapture
+
+    var id: String {
+        rawValue
+    }
+
+    var title: String {
+        switch self {
+        case .photo:
+            "写真"
+        case .objectCapture:
+            "3D撮影"
         }
     }
 }
