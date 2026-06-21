@@ -12,10 +12,17 @@ struct CharacterLibraryView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \ToyCharacter.createdAt, order: .reverse) private var characters: [ToyCharacter]
 
+    let resetTrigger: Int
+
+    @State private var navigationPath = NavigationPath()
     @State private var isAddingCharacter = false
 
+    init(resetTrigger: Int = 0) {
+        self.resetTrigger = resetTrigger
+    }
+
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $navigationPath) {
             Group {
                 if characters.isEmpty {
                     emptyState
@@ -23,9 +30,7 @@ struct CharacterLibraryView: View {
                     List {
                         Section {
                             ForEach(characters) { character in
-                                NavigationLink {
-                                    CharacterDetailView(character: character)
-                                } label: {
+                                NavigationLink(value: character.id) {
                                     characterRow(character)
                                 }
                                 .swipeActions(edge: .trailing, allowsFullSwipe: false) {
@@ -61,6 +66,16 @@ struct CharacterLibraryView: View {
             }
             .sheet(isPresented: $isAddingCharacter) {
                 AddCharacterView()
+            }
+            .navigationDestination(for: UUID.self) { characterID in
+                if let character = characters.first(where: { $0.id == characterID }) {
+                    CharacterDetailView(character: character)
+                } else {
+                    ContentUnavailableView("推しが見つかりません", systemImage: "questionmark.circle")
+                }
+            }
+            .onChange(of: resetTrigger) { _, _ in
+                navigationPath = NavigationPath()
             }
         }
     }

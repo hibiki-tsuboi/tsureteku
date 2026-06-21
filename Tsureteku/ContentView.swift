@@ -9,25 +9,42 @@ import SwiftUI
 import SwiftData
 
 struct ContentView: View {
+    @State private var selectedTab: AppTab = .ar
+    @State private var characterLibraryResetTrigger = 0
+
     var body: some View {
-        TabView {
+        TabView(selection: $selectedTab) {
             ARCameraScreen()
                 .tabItem {
                     Label("AR", systemImage: "camera.viewfinder")
                 }
+                .tag(AppTab.ar)
 
-            CharacterLibraryView()
+            CharacterLibraryView(resetTrigger: characterLibraryResetTrigger)
                 .tabItem {
                     Label("推し", systemImage: "teddybear")
                 }
+                .tag(AppTab.characters)
 
             CapturedPhotoHistoryView()
                 .tabItem {
                     Label("履歴", systemImage: "photo.stack")
                 }
+                .tag(AppTab.history)
+        }
+        .onChange(of: selectedTab) { oldTab, newTab in
+            if oldTab != .characters, newTab == .characters {
+                characterLibraryResetTrigger += 1
+            }
         }
         .preferredColorScheme(.light)
     }
+}
+
+private enum AppTab: Hashable {
+    case ar
+    case characters
+    case history
 }
 
 #Preview {
