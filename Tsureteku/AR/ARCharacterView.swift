@@ -256,6 +256,7 @@ struct ARCharacterView: UIViewRepresentable {
 
         func configure(_ arView: ARView) {
             arView.renderOptions.insert(.disableMotionBlur)
+            arView.renderOptions.remove(.disableGroundingShadows)
 
             // 暗い室内でも推し（3Dモデル）が暗く沈まないよう、環境光をやや明るめに底上げする。
             arView.environment.lighting.intensityExponent = Self.modelLightingIntensityExponent
@@ -339,6 +340,7 @@ struct ARCharacterView: UIViewRepresentable {
             let configuration = ARWorldTrackingConfiguration()
             configuration.planeDetection = [.horizontal, .vertical]
             configuration.environmentTexturing = .automatic
+            configuration.isLightEstimationEnabled = true
 
             // 対応端末では人物オクルージョンを有効にし、人の前後に推しが自然に回り込むようにする。
             if ARWorldTrackingConfiguration.supportsFrameSemantics(.personSegmentationWithDepth) {
@@ -851,11 +853,11 @@ struct ARCharacterView: UIViewRepresentable {
             let baseY = bounds.min.y
             let width = max(bounds.extents.x, asset.defaultSizeMeters / scale) * 1.08
             let depth = max(bounds.extents.z, bounds.extents.x * 0.5, asset.defaultSizeMeters / scale * 0.28)
+            // USDZは子Entity側にメッシュを持つことがあるため、階層全体に接地影を付ける。
+            applyGroundingShadow(to: entity)
+
             let selectionMarker = makeSelectionMarker(width: width * 1.08, depth: depth * 1.08, baseY: baseY)
             entity.addChild(selectionMarker)
-
-            // 3Dモデルは床面に実際の影を落とす（疑似的な接地影より自然）。
-            entity.components.set(GroundingShadowComponent(castsShadow: true))
 
             let anchor = AnchorEntity(raycastResult: result)
             anchor.addChild(entity)
@@ -873,6 +875,20 @@ struct ARCharacterView: UIViewRepresentable {
             )
             placements.append(placement)
             return placement
+        }
+
+        private func applyGroundingShadow(to entity: Entity) {
+            entity.components.set(
+                GroundingShadowComponent(
+                    castsShadow: true,
+                    receivesShadow: true,
+                    fadeBehaviorNearPhysicalObjects: .constant
+                )
+            )
+
+            for child in entity.children {
+                applyGroundingShadow(to: child)
+            }
         }
 
         private func orientationFacingCamera(from worldTransform: simd_float4x4, arView: ARView) -> simd_quatf {
