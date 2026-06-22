@@ -106,6 +106,10 @@ struct AddCharacterView: View {
                     await loadPhotoItem(newItem)
                 }
             }
+            .onAppear {
+                // 開いた時点で両タブとも既定名を入れておき、タブ切替で名前の有無がブレないようにする。
+                fillDefaultNameIfNeeded()
+            }
             .onChange(of: registrationMode) { _, newMode in
                 if newMode == .objectCapture {
                     fillDefaultNameIfNeeded()
@@ -378,7 +382,7 @@ private enum CharacterRegistrationMode: String, CaseIterable, Identifiable {
         case .photo:
             "写真"
         case .objectCapture:
-            "3D撮影"
+            "3Dモデル"
         }
     }
 }
