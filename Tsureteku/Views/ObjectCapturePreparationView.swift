@@ -187,7 +187,8 @@ struct NewObjectCaptureCharacterView: View {
                 ObjectCaptureWorkflowView(
                     character: character,
                     onModelCreated: { commitDraftCharacter() },
-                    onFlowDiscarded: { draftStore.cleanupIfNeeded() }
+                    onFlowDiscarded: { draftStore.cleanupIfNeeded() },
+                    generatesThumbnailFromCapture: true
                 )
             } else {
                 ContentUnavailableView {

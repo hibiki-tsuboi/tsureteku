@@ -20,6 +20,10 @@ struct ObjectCaptureWorkflowView: View {
     var onModelCreated: () -> Void = {}
     /// 3Dモデルを保存せずに撮影フローを離れたときの後始末に使う。
     var onFlowDiscarded: () -> Void = {}
+    /// 3Dモデル作成成功時に、撮影写真からサムネ画像を作り直すか。
+    /// 写真なしの3D新規登録ではプレースホルダーを実写サムネへ差し替えたいので true にする。
+    /// 既に写真サムネを持つ推しへ後から3Dを足す場合は、その写真を尊重して false のままにする。
+    var generatesThumbnailFromCapture = false
 
     @StateObject private var sessionStore = ObjectCaptureSessionStore()
     @StateObject private var finishReadySoundPlayer = FinishReadySoundPlayer()
@@ -791,6 +795,9 @@ struct ObjectCaptureWorkflowView: View {
                             CharacterImageStore.deleteModelIfExists(fileName: character.modelFileName)
                             character.modelFileName = output.fileName
                             didCommitModel = true
+                            if generatesThumbnailFromCapture {
+                                await applyCaptureThumbnail(fromDirectory: inputURL)
+                            }
                             character.updatedAt = Date()
                             try? modelContext.save()
                         }
@@ -835,6 +842,39 @@ struct ObjectCaptureWorkflowView: View {
                 CharacterImageStore.deleteModelIfExists(fileName: createdModelFileName)
             }
         }
+    }
+
+    /// 撮影フォルダの2D写真からサムネ画像を作り、プレースホルダー画像を差し替える。
+    /// 画像の生成・切り抜きは重いのでバックグラウンドで行い、保存後に古い画像を後始末する。
+    @MainActor
+    private func applyCaptureThumbnail(fromDirectory directoryURL: URL) async {
+        let previousOriginalFileName = character.originalImageFileName
+        let previousCutoutFileName = character.cutoutImageFileName
+
+        let saved = await Task.detached(priority: .userInitiated) { () -> (originalFileName: String, cutoutFileName: String)? in
+            guard let images = ObjectCaptureThumbnailService.makeThumbnailImages(fromCaptureDirectory: directoryURL) else {
+                return nil
+            }
+
+            do {
+                let originalFileName = try CharacterImageStore.save(images.source, kind: .original)
+                let cutoutFileName = try CharacterImageStore.save(images.cutout, kind: .cutout)
+                return (originalFileName, cutoutFileName)
+            } catch {
+                return nil
+            }
+        }.value
+
+        guard let saved else {
+            return
+        }
+
+        character.originalImageFileName = saved.originalFileName
+        character.cutoutImageFileName = saved.cutoutFileName
+
+        // 差し替え前のプレースホルダー画像はもう参照されないので削除し、孤立ファイルを残さない。
+        CharacterImageStore.deleteIfExists(fileName: previousOriginalFileName, kind: .original)
+        CharacterImageStore.deleteIfExists(fileName: previousCutoutFileName, kind: .cutout)
     }
 
     /// 生成失敗時に、原因の見当と次の一手をユーザーへ案内するメッセージを組み立てる。
