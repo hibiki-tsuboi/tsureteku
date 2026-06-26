@@ -54,6 +54,10 @@ struct ARCameraScreen: View {
 
     /// iPadの大画面で操作パネルや案内が間延びしないようにする最大幅。
     private static let contentMaxWidth: CGFloat = 540
+    /// iOS標準のカメラ撮影・録画フィードバック音。
+    private static let photoCaptureSoundID: SystemSoundID = 1108
+    private static let recordingStartSoundID: SystemSoundID = 1117
+    private static let recordingStopSoundID: SystemSoundID = 1118
 
     var body: some View {
         ZStack {
@@ -774,7 +778,7 @@ struct ARCameraScreen: View {
                     return
                 }
 
-                UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                triggerRecordingStartFeedback()
                 isRecordingReadyToStop = true
             }
         }
@@ -814,6 +818,7 @@ struct ARCameraScreen: View {
                     return
                 }
 
+                playRecordingStopSound()
                 recordingPreview = RecordingPreviewItem(url: outputURL)
             }
         }
@@ -832,12 +837,23 @@ struct ARCameraScreen: View {
     /// 撮影時に触覚・シャッター音・一瞬の白フラッシュで「撮れた」手応えを返す。
     private func triggerCaptureFeedback() {
         UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-        AudioServicesPlaySystemSound(1108)
+        AudioServicesPlaySystemSound(Self.photoCaptureSoundID)
 
         captureFlashOpacity = 0.9
         withAnimation(.easeOut(duration: 0.35)) {
             captureFlashOpacity = 0
         }
+    }
+
+    /// ReplayKitの録画開始が成功したタイミングで、録画開始が分かる音と触覚を返す。
+    private func triggerRecordingStartFeedback() {
+        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        AudioServicesPlaySystemSound(Self.recordingStartSoundID)
+    }
+
+    /// 録画停止と動画ファイル作成が終わったタイミングで、終了音を鳴らす。
+    private func playRecordingStopSound() {
+        AudioServicesPlaySystemSound(Self.recordingStopSoundID)
     }
 
     private func openAppSettings() {
