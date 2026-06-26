@@ -435,6 +435,7 @@ struct ARCharacterView: UIViewRepresentable {
             let unscaledHeight: Float
             let collisionCenter: SIMD3<Float>
             let collisionExtents: SIMD3<Float>
+            let visualPivotY: Float
 
             if let modelFileName = asset.modelFileName {
                 let modelURL = try CharacterImageStore.modelURL(for: modelFileName)
@@ -451,6 +452,7 @@ struct ARCharacterView: UIViewRepresentable {
                 visualEntity = loaded
                 collisionCenter = .zero
                 collisionExtents = bounds.extents
+                visualPivotY = bounds.min.y - center.y
                 root.orientation = simd_quatf(angle: asset.modelYawDegrees * .pi / 180, axis: [0, 1, 0])
             } else {
                 let imageURL = try CharacterImageStore.url(for: asset.cutoutImageFileName, kind: .cutout)
@@ -473,11 +475,14 @@ struct ARCharacterView: UIViewRepresentable {
                 unscaledHeight = 1.0
                 collisionCenter = .zero
                 collisionExtents = [aspectRatio, 1.0, max(0.02, aspectRatio * 0.04)]
+                visualPivotY = -0.5
             }
 
             root.name = asset.name
             let scale = asset.defaultSizeMeters / divisor
             let idleLocalAmplitude = idleLocalAmplitude(worldSizeMeters: asset.defaultSizeMeters, parentScale: scale)
+            motionPivot.position.y = visualPivotY
+            visualEntity.position.y -= visualPivotY
             motionPivot.addChild(visualEntity)
             root.addChild(motionPivot)
             root.scale = SIMD3<Float>(repeating: scale)
@@ -835,10 +840,13 @@ struct ARCharacterView: UIViewRepresentable {
             let motionPivot = Entity()
             let visualEntity = ModelEntity(mesh: mesh, materials: [material])
             let idleLocalAmplitude = idleLocalAmplitude(worldSizeMeters: height, parentScale: 1)
+            let baseY = -height / 2
 
             root.name = asset.name
             root.position.y = height / 2
             root.orientation = orientationFacingCamera(from: result.worldTransform, arView: arView)
+            motionPivot.position.y = baseY
+            visualEntity.position.y -= baseY
             motionPivot.addChild(visualEntity)
             root.addChild(motionPivot)
             applyInteractionCollision(
@@ -848,7 +856,6 @@ struct ARCharacterView: UIViewRepresentable {
                 idleLocalAmplitude: idleLocalAmplitude
             )
 
-            let baseY = -height / 2
             let shadow = makeContactShadow(width: width * 0.9, depth: max(0.08, width * 0.22), baseY: baseY)
             let selectionMarker = makeSelectionMarker(width: width * 1.08, depth: max(0.1, width * 0.28), baseY: baseY)
             root.addChild(shadow)
@@ -927,11 +934,14 @@ struct ARCharacterView: UIViewRepresentable {
             let idleLocalAmplitude = idleLocalAmplitude(worldSizeMeters: asset.defaultSizeMeters, parentScale: scale)
             let root = ModelEntity()
             let motionPivot = Entity()
+            let baseY = bounds.min.y
 
             root.name = asset.name
             root.scale = SIMD3<Float>(repeating: scale)
             root.position.y = max(0, -bounds.min.y * scale) + asset.modelVerticalOffsetMeters
             root.orientation = modelOrientationFacingCamera(from: result.worldTransform, arView: arView, yawDegrees: asset.modelYawDegrees)
+            motionPivot.position.y = baseY
+            entity.position.y -= baseY
             motionPivot.addChild(entity)
             root.addChild(motionPivot)
             applyInteractionCollision(
@@ -941,7 +951,6 @@ struct ARCharacterView: UIViewRepresentable {
                 idleLocalAmplitude: idleLocalAmplitude
             )
 
-            let baseY = bounds.min.y
             let width = max(bounds.extents.x, asset.defaultSizeMeters / scale) * 1.08
             let depth = max(bounds.extents.z, bounds.extents.x * 0.5, asset.defaultSizeMeters / scale * 0.28)
             // USDZは子Entity側にメッシュを持つことがあるため、階層全体に接地影を付ける。
@@ -1077,7 +1086,7 @@ struct ARCharacterView: UIViewRepresentable {
                 embeddedAnimation: embeddedAnimation,
                 phaseOffset: TimeInterval(placements.count) * 0.41,
                 verticalAmplitude: verticalAmplitude,
-                cycleDuration: 2.7
+                cycleDuration: 3.4
             )
 
             if isMotionEnabled {
@@ -1089,7 +1098,7 @@ struct ARCharacterView: UIViewRepresentable {
 
         private func idleWorldAmplitude(for sizeMeters: Float) -> Float {
             let normalizedSize = max(sizeMeters, 0.05)
-            return min(max(normalizedSize * 0.045, 0.008), 0.022)
+            return min(max(normalizedSize * 0.06, 0.012), 0.032)
         }
 
         private func idleLocalAmplitude(worldSizeMeters: Float, parentScale: Float) -> Float {
@@ -1302,34 +1311,49 @@ struct ARCharacterView: UIViewRepresentable {
                 var lift: Float = 0
                 var scale = SIMD3<Float>(repeating: 1)
                 var yaw: Float = 0
+                var pitch: Float = 0
                 var roll: Float = 0
 
-                if progress < 0.10 {
-                    let anticipation = smoothStep(progress / 0.10)
-                    scale = [1.01, 1 - 0.018 * anticipation, 1.01]
-                } else if progress < 0.32 {
-                    let jumpProgress = (progress - 0.10) / 0.22
+                if progress < 0.08 {
+                    let anticipation = smoothStep(progress / 0.08)
+                    scale = [1.015, 1 - 0.026 * anticipation, 1.015]
+                    pitch = 2 * .pi / 180 * anticipation
+                } else if progress < 0.26 {
+                    let jumpProgress = (progress - 0.08) / 0.18
                     let jump = sin(jumpProgress * .pi)
                     lift = jump * verticalAmplitude
-                    scale = [1 - 0.008 * jump, 1 + 0.018 * jump, 1 - 0.008 * jump]
-                    roll = -sin(jumpProgress * .pi) * 2.5 * .pi / 180
-                } else if progress < 0.44 {
-                    let landingProgress = (progress - 0.32) / 0.12
+                    scale = [1 - 0.012 * jump, 1 + 0.026 * jump, 1 - 0.012 * jump]
+                    pitch = -3 * .pi / 180 * jump
+                    roll = -4 * .pi / 180 * jump
+                } else if progress < 0.36 {
+                    let landingProgress = (progress - 0.26) / 0.10
                     let landing = sin(landingProgress * .pi)
-                    lift = landing * verticalAmplitude * 0.18
-                    scale = [1 + 0.008 * landing, 1 - 0.014 * landing, 1 + 0.008 * landing]
+                    lift = landing * verticalAmplitude * 0.15
+                    scale = [1 + 0.014 * landing, 1 - 0.024 * landing, 1 + 0.014 * landing]
+                    pitch = 2 * .pi / 180 * landing
+                } else if progress < 0.52 {
+                    let lookProgress = smoothStep((progress - 0.36) / 0.16)
+                    yaw = -12 * .pi / 180 * lookProgress
+                    roll = 4 * .pi / 180 * lookProgress
                 } else if progress < 0.68 {
-                    let shakeProgress = (progress - 0.44) / 0.24
-                    let easing = 1 - smoothStep(shakeProgress)
-                    let shake = sin(shakeProgress * 2 * .pi) * easing
-                    yaw = shake * 7 * .pi / 180
-                    roll = -shake * 3 * .pi / 180
+                    let lookProgress = smoothStep((progress - 0.52) / 0.16)
+                    yaw = (-12 + 24 * lookProgress) * .pi / 180
+                    roll = (4 - 8 * lookProgress) * .pi / 180
+                } else if progress < 0.82 {
+                    let lookProgress = smoothStep((progress - 0.68) / 0.14)
+                    yaw = (12 - 12 * lookProgress) * .pi / 180
+                    roll = (-4 + 4 * lookProgress) * .pi / 180
+                } else if progress < 0.94 {
+                    let nodProgress = (progress - 0.82) / 0.12
+                    pitch = -sin(nodProgress * 2 * .pi) * 4 * .pi / 180
+                    lift = max(0, sin(nodProgress * .pi)) * verticalAmplitude * 0.08
                 }
 
                 let yawRotation = simd_quatf(angle: yaw, axis: [0, 1, 0])
+                let pitchRotation = simd_quatf(angle: pitch, axis: [1, 0, 0])
                 let rollRotation = simd_quatf(angle: roll, axis: [0, 0, 1])
                 entity.position = basePosition + SIMD3<Float>(0, lift, 0)
-                entity.orientation = simd_mul(baseOrientation, simd_mul(yawRotation, rollRotation))
+                entity.orientation = simd_mul(baseOrientation, simd_mul(yawRotation, simd_mul(pitchRotation, rollRotation)))
                 entity.scale = baseScale * scale
             }
 
