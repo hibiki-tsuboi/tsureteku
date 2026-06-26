@@ -28,6 +28,7 @@ struct CharacterARAsset: Equatable {
 struct ARCharacterView: UIViewRepresentable {
     var selectedAsset: CharacterARAsset?
     var isSelfieMode: Bool
+    var isMotionEnabled: Bool
     /// 録画中はレティクルが画面収録に写り込まないよう隠すためのフラグ。
     var isRecording: Bool
     @Binding var captureTrigger: Int
@@ -84,6 +85,7 @@ struct ARCharacterView: UIViewRepresentable {
         context.coordinator.selectedPlacementName = $selectedPlacementName
         context.coordinator.isSceneEmpty = $isSceneEmpty
         context.coordinator.isCoachingActive = $isCoachingActive
+        context.coordinator.setMotionEnabled(isMotionEnabled)
         context.coordinator.isRecording = isRecording
         context.coordinator.updateSceneLighting(in: arView)
         context.coordinator.updateSelfieMode(isSelfieMode, in: arView)
@@ -183,6 +185,7 @@ struct ARCharacterView: UIViewRepresentable {
         var isSceneEmpty: Binding<Bool>
         var isCoachingActive: Binding<Bool>
         var isSelfieMode = false
+        private var isMotionEnabled = false
         var isRecording = false {
             didSet {
                 guard isRecording != oldValue else {
@@ -197,6 +200,7 @@ struct ARCharacterView: UIViewRepresentable {
         private var reticleEntity: Entity?
         /// 毎フレームのレイキャストでレティクルを更新する購読。
         private var sceneUpdateSubscription: Cancellable?
+        private var idleElapsedTime: TimeInterval = 0
         /// 撮影スナップショットの瞬間だけレティクルを写さないための一時抑制フラグ。
         private var suppressReticle = false
         private var placements: [PlacedCharacter] = [] {
@@ -290,11 +294,12 @@ struct ARCharacterView: UIViewRepresentable {
             self.reticleEntity = reticle
 
             // 毎フレーム画面中央から平面へレイキャストし、レティクルを吸着させる。
-            sceneUpdateSubscription = arView.scene.subscribe(to: SceneEvents.Update.self) { [weak self, weak arView] _ in
+            sceneUpdateSubscription = arView.scene.subscribe(to: SceneEvents.Update.self) { [weak self, weak arView] event in
                 guard let self, let arView else {
                     return
                 }
                 self.updateReticle(in: arView)
+                self.updateIdleAnimations(deltaTime: event.deltaTime)
             }
 
             if isSelfieMode {
@@ -423,9 +428,13 @@ struct ARCharacterView: UIViewRepresentable {
         }
 
         private func placeSelfieCharacter(_ asset: CharacterARAsset, in arView: ARView) throws -> PlacedCharacter {
-            let entity: ModelEntity
+            let root = ModelEntity()
+            let motionPivot = Entity()
+            let visualEntity: Entity
             let divisor: Float
             let unscaledHeight: Float
+            let collisionCenter: SIMD3<Float>
+            let collisionExtents: SIMD3<Float>
 
             if let modelFileName = asset.modelFileName {
                 let modelURL = try CharacterImageStore.modelURL(for: modelFileName)
@@ -439,10 +448,10 @@ struct ARCharacterView: UIViewRepresentable {
                 let center = (bounds.min + bounds.max) / 2
                 loaded.position = -center
 
-                let container = ModelEntity()
-                container.addChild(loaded)
-                container.orientation = simd_quatf(angle: asset.modelYawDegrees * .pi / 180, axis: [0, 1, 0])
-                entity = container
+                visualEntity = loaded
+                collisionCenter = .zero
+                collisionExtents = bounds.extents
+                root.orientation = simd_quatf(angle: asset.modelYawDegrees * .pi / 180, axis: [0, 1, 0])
             } else {
                 let imageURL = try CharacterImageStore.url(for: asset.cutoutImageFileName, kind: .cutout)
                 let texture = try brightenedColorTexture(
@@ -459,34 +468,49 @@ struct ARCharacterView: UIViewRepresentable {
                 material.opacityThreshold = 0.01
                 material.faceCulling = .none
 
-                entity = ModelEntity(mesh: mesh, materials: [material])
+                visualEntity = ModelEntity(mesh: mesh, materials: [material])
                 divisor = 1.0
                 unscaledHeight = 1.0
+                collisionCenter = .zero
+                collisionExtents = [aspectRatio, 1.0, max(0.02, aspectRatio * 0.04)]
             }
 
-            entity.name = asset.name
+            root.name = asset.name
             let scale = asset.defaultSizeMeters / divisor
-            entity.scale = SIMD3<Float>(repeating: scale)
+            let idleLocalAmplitude = idleLocalAmplitude(worldSizeMeters: asset.defaultSizeMeters, parentScale: scale)
+            motionPivot.addChild(visualEntity)
+            root.addChild(motionPivot)
+            root.scale = SIMD3<Float>(repeating: scale)
             // 顔トラッキングでは肩そのものは取れないため、顔アンカーから肩寄りの固定位置へ置く。
-            entity.position = selfiePosition(scaledHeight: unscaledHeight * scale)
-            entity.generateCollisionShapes(recursive: true)
+            root.position = selfiePosition(scaledHeight: unscaledHeight * scale)
+            applyInteractionCollision(
+                to: root,
+                center: collisionCenter,
+                extents: collisionExtents,
+                idleLocalAmplitude: idleLocalAmplitude
+            )
 
             let anchor = AnchorEntity(.face)
-            anchor.addChild(entity)
+            anchor.addChild(root)
             arView.scene.addAnchor(anchor)
-            arView.installGestures([.translation, .rotation, .scale], for: entity)
-            startIdleAnimation(for: entity)
+            arView.installGestures([.translation, .rotation, .scale], for: root)
+            let idleMotion = startIdleAnimation(
+                for: motionPivot,
+                visualEntity: visualEntity,
+                verticalAmplitude: idleLocalAmplitude
+            )
 
             selfieScaleDivisor = divisor
             selfieUnscaledHeight = unscaledHeight
 
             return PlacedCharacter(
                 anchor: anchor,
-                entity: entity,
+                entity: root,
                 name: asset.name,
-                baseScale: entity.scale,
+                baseScale: root.scale,
                 yawCorrectionDegrees: asset.modelYawDegrees,
-                selectionMarker: Entity()
+                selectionMarker: Entity(),
+                idleMotion: idleMotion
             )
         }
 
@@ -601,6 +625,22 @@ struct ARCharacterView: UIViewRepresentable {
             sceneUpdateSubscription = nil
             placementTask?.cancel()
             placementTask = nil
+        }
+
+        func setMotionEnabled(_ enabled: Bool) {
+            guard enabled != isMotionEnabled else {
+                return
+            }
+
+            isMotionEnabled = enabled
+
+            for placement in placements {
+                if enabled {
+                    placement.idleMotion.startEmbeddedAnimation()
+                } else {
+                    placement.idleMotion.stop()
+                }
+            }
         }
 
         /// 毎フレーム画面中央から平面へレイキャストし、レティクルを吸着させる。
@@ -791,31 +831,47 @@ struct ARCharacterView: UIViewRepresentable {
             material.opacityThreshold = 0.01
             material.faceCulling = .none
 
-            let entity = ModelEntity(mesh: mesh, materials: [material])
-            entity.name = asset.name
-            entity.position.y = height / 2
-            entity.orientation = orientationFacingCamera(from: result.worldTransform, arView: arView)
-            entity.generateCollisionShapes(recursive: false)
+            let root = ModelEntity()
+            let motionPivot = Entity()
+            let visualEntity = ModelEntity(mesh: mesh, materials: [material])
+            let idleLocalAmplitude = idleLocalAmplitude(worldSizeMeters: height, parentScale: 1)
+
+            root.name = asset.name
+            root.position.y = height / 2
+            root.orientation = orientationFacingCamera(from: result.worldTransform, arView: arView)
+            motionPivot.addChild(visualEntity)
+            root.addChild(motionPivot)
+            applyInteractionCollision(
+                to: root,
+                center: .zero,
+                extents: [width, height, max(0.02, width * 0.04)],
+                idleLocalAmplitude: idleLocalAmplitude
+            )
 
             let baseY = -height / 2
             let shadow = makeContactShadow(width: width * 0.9, depth: max(0.08, width * 0.22), baseY: baseY)
             let selectionMarker = makeSelectionMarker(width: width * 1.08, depth: max(0.1, width * 0.28), baseY: baseY)
-            entity.addChild(shadow)
-            entity.addChild(selectionMarker)
+            root.addChild(shadow)
+            root.addChild(selectionMarker)
 
             let anchor = AnchorEntity(raycastResult: result)
-            anchor.addChild(entity)
+            anchor.addChild(root)
             arView.scene.addAnchor(anchor)
-            arView.installGestures([.translation, .rotation, .scale], for: entity)
-            startIdleAnimation(for: entity)
+            arView.installGestures([.translation, .rotation, .scale], for: root)
+            let idleMotion = startIdleAnimation(
+                for: motionPivot,
+                visualEntity: visualEntity,
+                verticalAmplitude: idleLocalAmplitude
+            )
 
             let placement = PlacedCharacter(
                 anchor: anchor,
-                entity: entity,
+                entity: root,
                 name: asset.name,
-                baseScale: entity.scale,
+                baseScale: root.scale,
                 yawCorrectionDegrees: 0,
-                selectionMarker: selectionMarker
+                selectionMarker: selectionMarker,
+                idleMotion: idleMotion
             )
             placements.append(placement)
             return placement
@@ -868,12 +924,22 @@ struct ARCharacterView: UIViewRepresentable {
             let bounds = entity.visualBounds(recursive: true, relativeTo: entity)
             let maxExtent = max(bounds.extents.x, bounds.extents.y, bounds.extents.z)
             let scale = maxExtent > 0 ? asset.defaultSizeMeters / maxExtent : asset.defaultSizeMeters
+            let idleLocalAmplitude = idleLocalAmplitude(worldSizeMeters: asset.defaultSizeMeters, parentScale: scale)
+            let root = ModelEntity()
+            let motionPivot = Entity()
 
-            entity.name = asset.name
-            entity.scale = SIMD3<Float>(repeating: scale)
-            entity.position.y = max(0, -bounds.min.y * scale) + asset.modelVerticalOffsetMeters
-            entity.orientation = modelOrientationFacingCamera(from: result.worldTransform, arView: arView, yawDegrees: asset.modelYawDegrees)
-            entity.generateCollisionShapes(recursive: true)
+            root.name = asset.name
+            root.scale = SIMD3<Float>(repeating: scale)
+            root.position.y = max(0, -bounds.min.y * scale) + asset.modelVerticalOffsetMeters
+            root.orientation = modelOrientationFacingCamera(from: result.worldTransform, arView: arView, yawDegrees: asset.modelYawDegrees)
+            motionPivot.addChild(entity)
+            root.addChild(motionPivot)
+            applyInteractionCollision(
+                to: root,
+                center: (bounds.min + bounds.max) / 2,
+                extents: bounds.extents,
+                idleLocalAmplitude: idleLocalAmplitude
+            )
 
             let baseY = bounds.min.y
             let width = max(bounds.extents.x, asset.defaultSizeMeters / scale) * 1.08
@@ -882,21 +948,26 @@ struct ARCharacterView: UIViewRepresentable {
             applyGroundingShadow(to: entity)
 
             let selectionMarker = makeSelectionMarker(width: width * 1.08, depth: depth * 1.08, baseY: baseY)
-            entity.addChild(selectionMarker)
+            root.addChild(selectionMarker)
 
             let anchor = AnchorEntity(raycastResult: result)
-            anchor.addChild(entity)
+            anchor.addChild(root)
             arView.scene.addAnchor(anchor)
-            arView.installGestures([.translation, .rotation, .scale], for: entity)
-            startIdleAnimation(for: entity)
+            arView.installGestures([.translation, .rotation, .scale], for: root)
+            let idleMotion = startIdleAnimation(
+                for: motionPivot,
+                visualEntity: entity,
+                verticalAmplitude: idleLocalAmplitude
+            )
 
             let placement = PlacedCharacter(
                 anchor: anchor,
-                entity: entity,
+                entity: root,
                 name: asset.name,
-                baseScale: entity.scale,
+                baseScale: root.scale,
                 yawCorrectionDegrees: asset.modelYawDegrees,
-                selectionMarker: selectionMarker
+                selectionMarker: selectionMarker,
+                idleMotion: idleMotion
             )
             placements.append(placement)
             return placement
@@ -977,25 +1048,80 @@ struct ARCharacterView: UIViewRepresentable {
             }
         }
 
-        /// 置いた推しに“動き”をつける。USDZにアニメーションがあれば再生し、
-        /// 無ければふわふわ浮くアイドルモーションを加算アニメで再生する（移動・拡大・回転の操作と競合しない）。
-        private func startIdleAnimation(for entity: Entity) {
-            // USDZにアニメーションがある場合のみ再生する。
-            // （手続き的な浮遊アニメは transform を壊して巨大化・位置ずれを招くため使わない）
-            if let clip = idleAnimationClip(in: entity) {
-                clip.entity.playAnimation(clip.resource.repeat(), transitionDuration: 0.4)
+        private func updateIdleAnimations(deltaTime: TimeInterval) {
+            guard isMotionEnabled else {
+                return
+            }
+
+            idleElapsedTime += min(deltaTime, 1.0 / 15.0)
+
+            for placement in placements {
+                placement.idleMotion.apply(at: idleElapsedTime)
             }
         }
 
-        /// USDZに埋め込まれた再生可能なアニメーションを、自身または直下の子から探す。
+        /// 置いた推しに“動き”をつける。USDZにアニメーションがあれば再生し、
+        /// その外側のmotionPivotへ小さな待機ジャンプを重ねる。
+        private func startIdleAnimation(
+            for motionPivot: Entity,
+            visualEntity: Entity,
+            verticalAmplitude: Float
+        ) -> IdleMotion {
+            let embeddedAnimation = idleAnimationClip(in: visualEntity)
+
+            let motion = IdleMotion(
+                entity: motionPivot,
+                basePosition: motionPivot.position,
+                baseOrientation: motionPivot.orientation,
+                baseScale: motionPivot.scale,
+                embeddedAnimation: embeddedAnimation,
+                phaseOffset: TimeInterval(placements.count) * 0.41,
+                verticalAmplitude: verticalAmplitude,
+                cycleDuration: 2.7
+            )
+
+            if isMotionEnabled {
+                motion.startEmbeddedAnimation()
+            }
+
+            return motion
+        }
+
+        private func idleWorldAmplitude(for sizeMeters: Float) -> Float {
+            let normalizedSize = max(sizeMeters, 0.05)
+            return min(max(normalizedSize * 0.045, 0.008), 0.022)
+        }
+
+        private func idleLocalAmplitude(worldSizeMeters: Float, parentScale: Float) -> Float {
+            idleWorldAmplitude(for: worldSizeMeters) / max(abs(parentScale), 0.0001)
+        }
+
+        private func applyInteractionCollision(
+            to entity: ModelEntity,
+            center: SIMD3<Float>,
+            extents: SIMD3<Float>,
+            idleLocalAmplitude: Float
+        ) {
+            let paddedExtents = SIMD3<Float>(
+                max(extents.x, 0.04),
+                max(extents.y + idleLocalAmplitude, 0.04),
+                max(extents.z, 0.04)
+            )
+            let paddedCenter = center + SIMD3<Float>(0, idleLocalAmplitude / 2, 0)
+            let shape = ShapeResource.generateBox(size: paddedExtents)
+                .offsetBy(translation: paddedCenter)
+            entity.collision = CollisionComponent(shapes: [shape])
+        }
+
+        /// USDZに埋め込まれた再生可能なアニメーションを階層から探す。
         private func idleAnimationClip(in entity: Entity) -> (entity: Entity, resource: AnimationResource)? {
             if let resource = entity.availableAnimations.first {
                 return (entity, resource)
             }
 
             for child in entity.children {
-                if let resource = child.availableAnimations.first {
-                    return (child, resource)
+                if let clip = idleAnimationClip(in: child) {
+                    return clip
                 }
             }
 
@@ -1138,6 +1264,79 @@ struct ARCharacterView: UIViewRepresentable {
             let baseScale: SIMD3<Float>
             let yawCorrectionDegrees: Float
             let selectionMarker: Entity
+            let idleMotion: IdleMotion
+        }
+
+        private struct IdleMotion {
+            let entity: Entity
+            let basePosition: SIMD3<Float>
+            let baseOrientation: simd_quatf
+            let baseScale: SIMD3<Float>
+            let embeddedAnimation: (entity: Entity, resource: AnimationResource)?
+            let phaseOffset: TimeInterval
+            let verticalAmplitude: Float
+            let cycleDuration: TimeInterval
+
+            func startEmbeddedAnimation() {
+                guard let embeddedAnimation else {
+                    return
+                }
+
+                embeddedAnimation.entity.playAnimation(
+                    embeddedAnimation.resource.repeat(),
+                    transitionDuration: 0.25
+                )
+            }
+
+            func stop() {
+                embeddedAnimation?.entity.stopAllAnimations()
+                entity.position = basePosition
+                entity.orientation = baseOrientation
+                entity.scale = baseScale
+            }
+
+            func apply(at elapsedTime: TimeInterval) {
+                let cycleTime = (elapsedTime + phaseOffset)
+                    .truncatingRemainder(dividingBy: cycleDuration)
+                let progress = Float(cycleTime / cycleDuration)
+                var lift: Float = 0
+                var scale = SIMD3<Float>(repeating: 1)
+                var yaw: Float = 0
+                var roll: Float = 0
+
+                if progress < 0.10 {
+                    let anticipation = smoothStep(progress / 0.10)
+                    scale = [1.01, 1 - 0.018 * anticipation, 1.01]
+                } else if progress < 0.32 {
+                    let jumpProgress = (progress - 0.10) / 0.22
+                    let jump = sin(jumpProgress * .pi)
+                    lift = jump * verticalAmplitude
+                    scale = [1 - 0.008 * jump, 1 + 0.018 * jump, 1 - 0.008 * jump]
+                    roll = -sin(jumpProgress * .pi) * 2.5 * .pi / 180
+                } else if progress < 0.44 {
+                    let landingProgress = (progress - 0.32) / 0.12
+                    let landing = sin(landingProgress * .pi)
+                    lift = landing * verticalAmplitude * 0.18
+                    scale = [1 + 0.008 * landing, 1 - 0.014 * landing, 1 + 0.008 * landing]
+                } else if progress < 0.68 {
+                    let shakeProgress = (progress - 0.44) / 0.24
+                    let easing = 1 - smoothStep(shakeProgress)
+                    let shake = sin(shakeProgress * 2 * .pi) * easing
+                    yaw = shake * 7 * .pi / 180
+                    roll = -shake * 3 * .pi / 180
+                }
+
+                let yawRotation = simd_quatf(angle: yaw, axis: [0, 1, 0])
+                let rollRotation = simd_quatf(angle: roll, axis: [0, 0, 1])
+                entity.position = basePosition + SIMD3<Float>(0, lift, 0)
+                entity.orientation = simd_mul(baseOrientation, simd_mul(yawRotation, rollRotation))
+                entity.scale = baseScale * scale
+            }
+
+            private func smoothStep(_ value: Float) -> Float {
+                let clampedValue = min(max(value, 0), 1)
+                return clampedValue * clampedValue * (3 - 2 * clampedValue)
+            }
         }
     }
 }

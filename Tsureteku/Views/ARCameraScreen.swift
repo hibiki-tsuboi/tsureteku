@@ -18,6 +18,7 @@ struct ARCameraScreen: View {
     @Query(sort: \ToyCharacter.createdAt, order: .reverse) private var characters: [ToyCharacter]
 
     @State private var selectedCharacterID: UUID?
+    @State private var isIdleMotionEnabled = false
     @State private var captureTrigger = 0
     @State private var resetTrigger = 0
     @State private var scaleDownTrigger = 0
@@ -61,7 +62,10 @@ struct ARCameraScreen: View {
                 landingView
             }
         }
-        .onAppear(perform: selectInitialCharacterIfNeeded)
+        .onAppear {
+            selectInitialCharacterIfNeeded()
+            isIdleMotionEnabled = false
+        }
         .onChange(of: characters.map(\.id)) { _, _ in
             selectInitialCharacterIfNeeded()
         }
@@ -126,6 +130,7 @@ struct ARCameraScreen: View {
             ARCharacterView(
                 selectedAsset: selectedAsset,
                 isSelfieMode: isSelfieMode,
+                isMotionEnabled: isIdleMotionEnabled,
                 isRecording: isRecording,
                 captureTrigger: $captureTrigger,
                 resetTrigger: $resetTrigger,
@@ -203,6 +208,7 @@ struct ARCameraScreen: View {
                 accessibilityLabel: "ARを閉じる"
             ) {
                 isSelfieMode = false
+                isIdleMotionEnabled = false
                 withAnimation(.easeInOut(duration: 0.25)) {
                     isARActive = false
                 }
@@ -211,6 +217,14 @@ struct ARCameraScreen: View {
             Spacer()
 
             if !characters.isEmpty {
+                arHeaderButton(
+                    systemImage: "sparkles",
+                    accessibilityLabel: isIdleMotionEnabled ? "推しの動きをオフ" : "推しの動きをオン",
+                    isActive: isIdleMotionEnabled
+                ) {
+                    toggleIdleMotion()
+                }
+
                 if ARFaceTrackingConfiguration.isSupported {
                     arHeaderButton(
                         systemImage: isSelfieMode ? "camera.rotate.fill" : "camera.rotate",
@@ -690,6 +704,8 @@ struct ARCameraScreen: View {
     private func activateAR() {
         // 撮影プレビューを閉じた後に古い写真状態が残っていても、次回起動時に再表示しない。
         capturedPhoto = nil
+        // 動きはARを開くたびにOFFから始める。
+        isIdleMotionEnabled = false
         // AR画面を開くたびに、推しピッカーをすぐ使えるよう展開しておく。
         isControlPanelExpanded = true
 
@@ -703,6 +719,11 @@ struct ARCameraScreen: View {
         withAnimation(.easeInOut(duration: 0.2)) {
             isSelfieMode.toggle()
         }
+    }
+
+    private func toggleIdleMotion() {
+        isIdleMotionEnabled.toggle()
+        showStatus(isIdleMotionEnabled ? "推しの動きをONにしました。" : "推しの動きをOFFにしました。")
     }
 
     private func startRecordingAfterConfirmation() {
