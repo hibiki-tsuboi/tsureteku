@@ -84,10 +84,17 @@ struct CharacterDetailView: View {
                         .foregroundStyle(.secondary)
                         .frame(width: 48, alignment: .trailing)
                 }
+
+                Toggle(isOn: $character.isARMotionEnabled) {
+                    Label("配置時に動かす", systemImage: "sparkles")
+                }
+                .onChange(of: character.isARMotionEnabled) { _, _ in
+                    save()
+                }
             } header: {
                 Text("AR")
             } footer: {
-                Text("ARで配置した時の推しの明るさを調整します。")
+                Text("ARで新しく配置した時の推しの明るさや動きの初期状態を調整します。配置後はAR画面で1体ずつON/OFFできます。")
             }
 
             Section("3Dモデル") {

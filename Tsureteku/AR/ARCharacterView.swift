@@ -23,12 +23,12 @@ struct CharacterARAsset: Equatable {
     let arBrightnessMultiplier: Float
     let modelYawDegrees: Float
     let modelVerticalOffsetMeters: Float
+    let isMotionEnabled: Bool
 }
 
 struct ARCharacterView: UIViewRepresentable {
     var selectedAsset: CharacterARAsset?
     var isSelfieMode: Bool
-    var isMotionEnabled: Bool
     /// 録画中はレティクルが画面収録に写り込まないよう隠すためのフラグ。
     var isRecording: Bool
     @Binding var captureTrigger: Int
@@ -40,7 +40,9 @@ struct ARCharacterView: UIViewRepresentable {
     @Binding var faceCameraTrigger: Int
     @Binding var removeSelectedTrigger: Int
     @Binding var clearPlacementSelectionTrigger: Int
+    @Binding var toggleSelectedPlacementMotionTrigger: Int
     @Binding var selectedPlacementName: String?
+    @Binding var selectedPlacementMotionEnabled: Bool
     /// シーン上に推しが1体も置かれていないか。配置ヒントの表示判定に使う。
     @Binding var isSceneEmpty: Bool
     /// Apple標準の平面検出コーチングが表示中か。表示中は配置ヒントを出さない。
@@ -52,6 +54,7 @@ struct ARCharacterView: UIViewRepresentable {
         let coordinator = Coordinator(
             selectedAsset: selectedAsset,
             selectedPlacementName: $selectedPlacementName,
+            selectedPlacementMotionEnabled: $selectedPlacementMotionEnabled,
             isSceneEmpty: $isSceneEmpty,
             isCoachingActive: $isCoachingActive,
             onCapture: onCapture,
@@ -66,7 +69,8 @@ struct ARCharacterView: UIViewRepresentable {
             rotateRightTrigger: rotateRightTrigger,
             faceCameraTrigger: faceCameraTrigger,
             removeSelectedTrigger: removeSelectedTrigger,
-            clearPlacementSelectionTrigger: clearPlacementSelectionTrigger
+            clearPlacementSelectionTrigger: clearPlacementSelectionTrigger,
+            toggleSelectedPlacementMotionTrigger: toggleSelectedPlacementMotionTrigger
         )
         return coordinator
     }
@@ -79,13 +83,13 @@ struct ARCharacterView: UIViewRepresentable {
     }
 
     func updateUIView(_ arView: ARView, context: Context) {
-        context.coordinator.selectedAsset = selectedAsset
+        context.coordinator.updateSelectedAsset(selectedAsset)
         context.coordinator.onCapture = onCapture
         context.coordinator.onStatus = onStatus
         context.coordinator.selectedPlacementName = $selectedPlacementName
+        context.coordinator.selectedPlacementMotionEnabled = $selectedPlacementMotionEnabled
         context.coordinator.isSceneEmpty = $isSceneEmpty
         context.coordinator.isCoachingActive = $isCoachingActive
-        context.coordinator.setMotionEnabled(isMotionEnabled)
         context.coordinator.isRecording = isRecording
         context.coordinator.updateSceneLighting(in: arView)
         context.coordinator.updateSelfieMode(isSelfieMode, in: arView)
@@ -161,6 +165,14 @@ struct ARCharacterView: UIViewRepresentable {
                 context.coordinator.clearSelectedPlacement()
             }
         }
+
+        if toggleSelectedPlacementMotionTrigger != context.coordinator.lastToggleSelectedPlacementMotionTrigger {
+            context.coordinator.lastToggleSelectedPlacementMotionTrigger = toggleSelectedPlacementMotionTrigger
+
+            if toggleSelectedPlacementMotionTrigger > 0 {
+                context.coordinator.toggleSelectedPlacementMotion()
+            }
+        }
     }
 
     static func dismantleUIView(_ arView: ARView, coordinator: Coordinator) {
@@ -179,13 +191,14 @@ struct ARCharacterView: UIViewRepresentable {
         var lastFaceCameraTrigger = 0
         var lastRemoveSelectedTrigger = 0
         var lastClearPlacementSelectionTrigger = 0
+        var lastToggleSelectedPlacementMotionTrigger = 0
         var onCapture: (Result<UIImage, Error>) -> Void
         var onStatus: (String) -> Void
         var selectedPlacementName: Binding<String?>
+        var selectedPlacementMotionEnabled: Binding<Bool>
         var isSceneEmpty: Binding<Bool>
         var isCoachingActive: Binding<Bool>
         var isSelfieMode = false
-        private var isMotionEnabled = false
         var isRecording = false {
             didSet {
                 guard isRecording != oldValue else {
@@ -225,6 +238,7 @@ struct ARCharacterView: UIViewRepresentable {
         init(
             selectedAsset: CharacterARAsset?,
             selectedPlacementName: Binding<String?>,
+            selectedPlacementMotionEnabled: Binding<Bool>,
             isSceneEmpty: Binding<Bool>,
             isCoachingActive: Binding<Bool>,
             onCapture: @escaping (Result<UIImage, Error>) -> Void,
@@ -232,6 +246,7 @@ struct ARCharacterView: UIViewRepresentable {
         ) {
             self.selectedAsset = selectedAsset
             self.selectedPlacementName = selectedPlacementName
+            self.selectedPlacementMotionEnabled = selectedPlacementMotionEnabled
             self.isSceneEmpty = isSceneEmpty
             self.isCoachingActive = isCoachingActive
             self.onCapture = onCapture
@@ -247,7 +262,8 @@ struct ARCharacterView: UIViewRepresentable {
             rotateRightTrigger: Int,
             faceCameraTrigger: Int,
             removeSelectedTrigger: Int,
-            clearPlacementSelectionTrigger: Int
+            clearPlacementSelectionTrigger: Int,
+            toggleSelectedPlacementMotionTrigger: Int
         ) {
             lastCaptureTrigger = captureTrigger
             lastResetTrigger = resetTrigger
@@ -258,6 +274,11 @@ struct ARCharacterView: UIViewRepresentable {
             lastFaceCameraTrigger = faceCameraTrigger
             lastRemoveSelectedTrigger = removeSelectedTrigger
             lastClearPlacementSelectionTrigger = clearPlacementSelectionTrigger
+            lastToggleSelectedPlacementMotionTrigger = toggleSelectedPlacementMotionTrigger
+        }
+
+        func updateSelectedAsset(_ asset: CharacterARAsset?) {
+            selectedAsset = asset
         }
 
         func configure(_ arView: ARView) {
@@ -502,7 +523,8 @@ struct ARCharacterView: UIViewRepresentable {
             let idleMotion = startIdleAnimation(
                 for: motionPivot,
                 visualEntity: visualEntity,
-                verticalAmplitude: idleLocalAmplitude
+                verticalAmplitude: idleLocalAmplitude,
+                isEnabled: asset.isMotionEnabled
             )
 
             selfieScaleDivisor = divisor
@@ -510,12 +532,14 @@ struct ARCharacterView: UIViewRepresentable {
 
             return PlacedCharacter(
                 anchor: anchor,
+                assetID: asset.id,
                 entity: root,
                 name: asset.name,
                 baseScale: root.scale,
                 yawCorrectionDegrees: asset.modelYawDegrees,
                 selectionMarker: Entity(),
-                idleMotion: idleMotion
+                idleMotion: idleMotion,
+                isMotionEnabled: asset.isMotionEnabled
             )
         }
 
@@ -632,19 +656,31 @@ struct ARCharacterView: UIViewRepresentable {
             placementTask = nil
         }
 
-        func setMotionEnabled(_ enabled: Bool) {
-            guard enabled != isMotionEnabled else {
+        func toggleSelectedPlacementMotion() {
+            guard let selectedPlacementID,
+                  let index = placements.firstIndex(where: { $0.id == selectedPlacementID }) else {
+                onStatus("動きを切り替える推しを選択してください。")
                 return
             }
 
-            isMotionEnabled = enabled
+            let enabled = !placements[index].isMotionEnabled
+            setMotionEnabled(enabled, forPlacementAt: index)
+            selectedPlacementMotionEnabled.wrappedValue = enabled
+            onStatus(enabled ? "\(placements[index].name)の動きをONにしました。" : "\(placements[index].name)の動きをOFFにしました。")
+        }
 
-            for placement in placements {
-                if enabled {
-                    placement.idleMotion.startEmbeddedAnimation()
-                } else {
-                    placement.idleMotion.stop()
-                }
+        private func setMotionEnabled(_ enabled: Bool, forPlacementAt index: Int) {
+            guard placements.indices.contains(index),
+                  placements[index].isMotionEnabled != enabled else {
+                return
+            }
+
+            placements[index].isMotionEnabled = enabled
+
+            if enabled {
+                placements[index].idleMotion.startEmbeddedAnimation()
+            } else {
+                placements[index].idleMotion.stop()
             }
         }
 
@@ -807,6 +843,7 @@ struct ARCharacterView: UIViewRepresentable {
         func clearSelectedPlacement() {
             selectedPlacementID = nil
             selectedPlacementName.wrappedValue = nil
+            selectedPlacementMotionEnabled.wrappedValue = false
             updateSelectionMarkerVisibility()
         }
 
@@ -868,17 +905,20 @@ struct ARCharacterView: UIViewRepresentable {
             let idleMotion = startIdleAnimation(
                 for: motionPivot,
                 visualEntity: visualEntity,
-                verticalAmplitude: idleLocalAmplitude
+                verticalAmplitude: idleLocalAmplitude,
+                isEnabled: asset.isMotionEnabled
             )
 
             let placement = PlacedCharacter(
                 anchor: anchor,
+                assetID: asset.id,
                 entity: root,
                 name: asset.name,
                 baseScale: root.scale,
                 yawCorrectionDegrees: 0,
                 selectionMarker: selectionMarker,
-                idleMotion: idleMotion
+                idleMotion: idleMotion,
+                isMotionEnabled: asset.isMotionEnabled
             )
             placements.append(placement)
             return placement
@@ -966,17 +1006,20 @@ struct ARCharacterView: UIViewRepresentable {
             let idleMotion = startIdleAnimation(
                 for: motionPivot,
                 visualEntity: entity,
-                verticalAmplitude: idleLocalAmplitude
+                verticalAmplitude: idleLocalAmplitude,
+                isEnabled: asset.isMotionEnabled
             )
 
             let placement = PlacedCharacter(
                 anchor: anchor,
+                assetID: asset.id,
                 entity: root,
                 name: asset.name,
                 baseScale: root.scale,
                 yawCorrectionDegrees: asset.modelYawDegrees,
                 selectionMarker: selectionMarker,
-                idleMotion: idleMotion
+                idleMotion: idleMotion,
+                isMotionEnabled: asset.isMotionEnabled
             )
             placements.append(placement)
             return placement
@@ -1048,6 +1091,7 @@ struct ARCharacterView: UIViewRepresentable {
         private func selectPlacement(_ placement: PlacedCharacter) {
             selectedPlacementID = placement.id
             selectedPlacementName.wrappedValue = placement.name
+            selectedPlacementMotionEnabled.wrappedValue = placement.isMotionEnabled
             updateSelectionMarkerVisibility()
         }
 
@@ -1058,13 +1102,13 @@ struct ARCharacterView: UIViewRepresentable {
         }
 
         private func updateIdleAnimations(deltaTime: TimeInterval) {
-            guard isMotionEnabled else {
-                return
-            }
-
             idleElapsedTime += min(deltaTime, 1.0 / 15.0)
 
             for placement in placements {
+                guard placement.isMotionEnabled else {
+                    continue
+                }
+
                 placement.idleMotion.apply(at: idleElapsedTime)
             }
         }
@@ -1074,7 +1118,8 @@ struct ARCharacterView: UIViewRepresentable {
         private func startIdleAnimation(
             for motionPivot: Entity,
             visualEntity: Entity,
-            verticalAmplitude: Float
+            verticalAmplitude: Float,
+            isEnabled: Bool
         ) -> IdleMotion {
             let embeddedAnimation = idleAnimationClip(in: visualEntity)
 
@@ -1089,7 +1134,7 @@ struct ARCharacterView: UIViewRepresentable {
                 cycleDuration: 3.4
             )
 
-            if isMotionEnabled {
+            if isEnabled {
                 motion.startEmbeddedAnimation()
             }
 
@@ -1268,12 +1313,14 @@ struct ARCharacterView: UIViewRepresentable {
         private struct PlacedCharacter {
             let id = UUID()
             let anchor: AnchorEntity
+            let assetID: UUID
             let entity: Entity
             let name: String
             let baseScale: SIMD3<Float>
             let yawCorrectionDegrees: Float
             let selectionMarker: Entity
             let idleMotion: IdleMotion
+            var isMotionEnabled: Bool
         }
 
         private struct IdleMotion {

@@ -18,7 +18,6 @@ struct ARCameraScreen: View {
     @Query(sort: \ToyCharacter.createdAt, order: .reverse) private var characters: [ToyCharacter]
 
     @State private var selectedCharacterID: UUID?
-    @State private var isIdleMotionEnabled = false
     @State private var captureTrigger = 0
     @State private var resetTrigger = 0
     @State private var scaleDownTrigger = 0
@@ -28,6 +27,7 @@ struct ARCameraScreen: View {
     @State private var faceCameraTrigger = 0
     @State private var removeSelectedTrigger = 0
     @State private var clearPlacementSelectionTrigger = 0
+    @State private var toggleSelectedPlacementMotionTrigger = 0
     @State private var isAddingCharacter = false
     @State private var isARActive = false
     @State private var isCameraAccessDenied = false
@@ -44,6 +44,7 @@ struct ARCameraScreen: View {
     @State private var captureFlashOpacity = 0.0
     @State private var statusMessage: String?
     @State private var selectedPlacementName: String?
+    @State private var selectedPlacementMotionEnabled = false
     /// シーンに推しがまだ1体も置かれていないか。配置ヒントの表示判定に使う。
     @State private var isSceneEmpty = true
     /// Apple標準の平面検出コーチングが表示中か。表示中は配置ヒントを出さない。
@@ -64,7 +65,6 @@ struct ARCameraScreen: View {
         }
         .onAppear {
             selectInitialCharacterIfNeeded()
-            isIdleMotionEnabled = false
         }
         .onChange(of: characters.map(\.id)) { _, _ in
             selectInitialCharacterIfNeeded()
@@ -130,7 +130,6 @@ struct ARCameraScreen: View {
             ARCharacterView(
                 selectedAsset: selectedAsset,
                 isSelfieMode: isSelfieMode,
-                isMotionEnabled: isIdleMotionEnabled,
                 isRecording: isRecording,
                 captureTrigger: $captureTrigger,
                 resetTrigger: $resetTrigger,
@@ -141,7 +140,9 @@ struct ARCameraScreen: View {
                 faceCameraTrigger: $faceCameraTrigger,
                 removeSelectedTrigger: $removeSelectedTrigger,
                 clearPlacementSelectionTrigger: $clearPlacementSelectionTrigger,
+                toggleSelectedPlacementMotionTrigger: $toggleSelectedPlacementMotionTrigger,
                 selectedPlacementName: $selectedPlacementName,
+                selectedPlacementMotionEnabled: $selectedPlacementMotionEnabled,
                 isSceneEmpty: $isSceneEmpty,
                 isCoachingActive: $isCoachingActive,
                 onCapture: handleCapture,
@@ -208,7 +209,6 @@ struct ARCameraScreen: View {
                 accessibilityLabel: "ARを閉じる"
             ) {
                 isSelfieMode = false
-                isIdleMotionEnabled = false
                 withAnimation(.easeInOut(duration: 0.25)) {
                     isARActive = false
                 }
@@ -217,14 +217,6 @@ struct ARCameraScreen: View {
             Spacer()
 
             if !characters.isEmpty {
-                arHeaderButton(
-                    systemImage: "sparkles",
-                    accessibilityLabel: isIdleMotionEnabled ? "推しの動きをオフ" : "推しの動きをオン",
-                    isActive: isIdleMotionEnabled
-                ) {
-                    toggleIdleMotion()
-                }
-
                 if ARFaceTrackingConfiguration.isSupported {
                     arHeaderButton(
                         systemImage: isSelfieMode ? "camera.rotate.fill" : "camera.rotate",
@@ -591,6 +583,14 @@ struct ARCameraScreen: View {
                     rotateRightTrigger += 1
                 }
 
+                placementToolButton(
+                    systemImage: "sparkles",
+                    accessibilityLabel: selectedPlacementMotionEnabled ? "選択中の推しの動きをオフ" : "選択中の推しの動きをオン",
+                    isActive: selectedPlacementMotionEnabled
+                ) {
+                    toggleIdleMotion()
+                }
+
                 if !isSelfieMode {
                     placementToolButton(systemImage: "scope", accessibilityLabel: "選択中の推しをカメラに向ける") {
                         faceCameraTrigger += 1
@@ -612,6 +612,7 @@ struct ARCameraScreen: View {
     private func placementToolButton(
         systemImage: String,
         accessibilityLabel: String,
+        isActive: Bool = false,
         role: ButtonRole? = nil,
         action: @escaping () -> Void
     ) -> some View {
@@ -619,11 +620,18 @@ struct ARCameraScreen: View {
             Image(systemName: systemImage)
                 .font(.title3.weight(.semibold))
                 .frame(width: 44, height: 44)
-                .foregroundStyle(role == .destructive ? .red : BrandColor.purple)
-                .background(.thinMaterial, in: Circle())
+                .foregroundStyle(role == .destructive ? .red : (isActive ? .white : BrandColor.purple))
+                .background {
+                    ZStack {
+                        Circle().fill(.thinMaterial)
+                        if isActive {
+                            Circle().fill(BrandColor.purple.opacity(0.9))
+                        }
+                    }
+                }
                 .overlay {
                     Circle()
-                        .stroke(.white.opacity(0.24), lineWidth: 1)
+                        .stroke(.white.opacity(isActive ? 0.5 : 0.24), lineWidth: 1)
                 }
         }
         .buttonStyle(.plain)
@@ -644,7 +652,8 @@ struct ARCameraScreen: View {
             defaultSizeMeters: Float(selectedCharacter.defaultSizeMeters),
             arBrightnessMultiplier: Float(selectedCharacter.normalizedARBrightnessMultiplier),
             modelYawDegrees: Float(selectedCharacter.modelYawDegrees),
-            modelVerticalOffsetMeters: Float(selectedCharacter.modelVerticalOffsetMeters)
+            modelVerticalOffsetMeters: Float(selectedCharacter.modelVerticalOffsetMeters),
+            isMotionEnabled: selectedCharacter.isARMotionEnabled
         )
     }
 
@@ -704,8 +713,6 @@ struct ARCameraScreen: View {
     private func activateAR() {
         // 撮影プレビューを閉じた後に古い写真状態が残っていても、次回起動時に再表示しない。
         capturedPhoto = nil
-        // 動きはARを開くたびにOFFから始める。
-        isIdleMotionEnabled = false
         // AR画面を開くたびに、推しピッカーをすぐ使えるよう展開しておく。
         isControlPanelExpanded = true
 
@@ -722,8 +729,7 @@ struct ARCameraScreen: View {
     }
 
     private func toggleIdleMotion() {
-        isIdleMotionEnabled.toggle()
-        showStatus(isIdleMotionEnabled ? "推しの動きをONにしました。" : "推しの動きをOFFにしました。")
+        toggleSelectedPlacementMotionTrigger += 1
     }
 
     private func startRecordingAfterConfirmation() {

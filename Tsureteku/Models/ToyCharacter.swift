@@ -22,6 +22,7 @@ final class ToyCharacter {
     var arBrightnessMultiplier: Double = 1.0
     var modelYawDegrees: Double = 0
     var modelVerticalOffsetMeters: Double = 0
+    var isARMotionEnabled: Bool = false
     var createdAt: Date
     var updatedAt: Date
     var lastUsedAt: Date?
@@ -45,6 +46,7 @@ final class ToyCharacter {
         arBrightnessMultiplier: Double = 1.0,
         modelYawDegrees: Double = 0,
         modelVerticalOffsetMeters: Double = 0,
+        isARMotionEnabled: Bool = false,
         createdAt: Date = Date(),
         updatedAt: Date = Date(),
         lastUsedAt: Date? = nil
@@ -59,6 +61,7 @@ final class ToyCharacter {
         self.arBrightnessMultiplier = arBrightnessMultiplier
         self.modelYawDegrees = modelYawDegrees
         self.modelVerticalOffsetMeters = modelVerticalOffsetMeters
+        self.isARMotionEnabled = isARMotionEnabled
         self.createdAt = createdAt
         self.updatedAt = updatedAt
         self.lastUsedAt = lastUsedAt
