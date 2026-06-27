@@ -29,10 +29,13 @@ struct AddCharacterView: View {
     @State private var isCameraPresented = false
     @State private var isManualTrimPresented = false
     @State private var isImportingModel = false
+    @State private var isModelImportProcessing = false
     @State private var importedModelFileName: String?
     @State private var importedModelDisplayName: String?
+    @State private var importedModelThumbnailImage: UIImage?
     @State private var defaultSizeMeters = ToyCharacter.initialSizeMeters
     @State private var activeProcessingID: UUID?
+    @State private var activeModelImportID: UUID?
 
     var body: some View {
         NavigationStack {
@@ -88,7 +91,7 @@ struct AddCharacterView: View {
                             .disabled(!canSave || isProcessing)
                     } else if importedModelFileName != nil {
                         Button("保存", action: saveImportedModelCharacter)
-                            .disabled(!canSaveImportedModel)
+                            .disabled(!canSaveImportedModel || isModelImportProcessing)
                     }
                 }
             }
@@ -200,18 +203,23 @@ struct AddCharacterView: View {
             }
 
             if let importedModelDisplayName {
-                Label {
-                    Text(importedModelDisplayName)
-                        .lineLimit(1)
-                } icon: {
-                    Image(systemName: "checkmark.circle.fill")
-                        .foregroundStyle(.green)
+                HStack(spacing: 12) {
+                    modelThumbnailPreview
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(importedModelDisplayName)
+                            .lineLimit(1)
+
+                        Text(isModelImportProcessing ? "サムネイルを作成中" : "3Dモデルを登録できます")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
                 }
             }
         } header: {
             Text("3Dデータ")
         } footer: {
-            Text("USDZファイルを選ぶと、新しい推しとして登録できます。一覧用の画像はあとから詳細画面で変更できます。")
+            Text("USDZファイルを選ぶと、モデルから一覧用サムネイルを作成して新しい推しとして登録できます。画像はあとから詳細画面で変更できます。")
         }
 
         Section {
@@ -242,6 +250,28 @@ struct AddCharacterView: View {
         }
 
         arSizeSection
+    }
+
+    @ViewBuilder
+    private var modelThumbnailPreview: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 8)
+                .fill(Color(.secondarySystemBackground))
+
+            if let importedModelThumbnailImage {
+                Image(uiImage: importedModelThumbnailImage)
+                    .resizable()
+                    .scaledToFit()
+                    .padding(7)
+            } else if isModelImportProcessing {
+                ProgressView()
+            } else {
+                Image(systemName: "cube.fill")
+                    .font(.title2)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .frame(width: 64, height: 64)
     }
 
     private var arSizeSection: some View {
@@ -316,17 +346,40 @@ struct AddCharacterView: View {
     }
 
     private func importModel(_ result: Result<URL, Error>) {
+        let importID = UUID()
+        activeModelImportID = importID
+        isModelImportProcessing = true
+
         do {
             let sourceURL = try result.get()
             let fileName = try CharacterImageStore.saveModel(from: sourceURL)
+            let modelURL = try CharacterImageStore.modelURL(for: fileName)
 
             discardImportedModel()
+            activeModelImportID = importID
+            isModelImportProcessing = true
             importedModelFileName = fileName
             importedModelDisplayName = sourceURL.lastPathComponent
+            importedModelThumbnailImage = nil
             errorMessage = nil
             warningMessage = nil
             fillDefaultNameIfNeeded()
+
+            Task {
+                let thumbnail = await ModelThumbnailService.makeThumbnail(for: modelURL)
+
+                guard activeModelImportID == importID,
+                      importedModelFileName == fileName else {
+                    return
+                }
+
+                importedModelThumbnailImage = thumbnail ?? CharacterPlaceholderImageFactory.make3DModelImage()
+                isModelImportProcessing = false
+                activeModelImportID = nil
+            }
         } catch {
+            isModelImportProcessing = false
+            activeModelImportID = nil
             errorMessage = error.localizedDescription
         }
     }
@@ -437,10 +490,10 @@ struct AddCharacterView: View {
         var insertedCharacter: ToyCharacter?
 
         do {
-            let placeholderImage = CharacterPlaceholderImageFactory.make3DModelImage()
-            let originalFileName = try CharacterImageStore.save(placeholderImage, kind: .original)
+            let thumbnailImage = importedModelThumbnailImage ?? CharacterPlaceholderImageFactory.make3DModelImage()
+            let originalFileName = try CharacterImageStore.save(thumbnailImage, kind: .original)
             savedOriginalFileName = originalFileName
-            let cutoutFileName = try CharacterImageStore.save(placeholderImage, kind: .cutout)
+            let cutoutFileName = try CharacterImageStore.save(thumbnailImage, kind: .cutout)
             savedCutoutFileName = cutoutFileName
             let now = Date()
             let character = ToyCharacter(
@@ -475,8 +528,11 @@ struct AddCharacterView: View {
 
     private func discardImportedModel() {
         CharacterImageStore.deleteModelIfExists(fileName: importedModelFileName)
+        activeModelImportID = nil
+        isModelImportProcessing = false
         importedModelFileName = nil
         importedModelDisplayName = nil
+        importedModelThumbnailImage = nil
     }
 }
 
