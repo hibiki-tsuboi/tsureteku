@@ -15,6 +15,8 @@ struct CharacterDetailView: View {
     @Environment(\.modelContext) private var modelContext
     @Bindable var character: ToyCharacter
 
+    @FocusState private var isNameFocused: Bool
+    @State private var draftName = ""
     @State private var isImportingModel = false
     @State private var isEditingImage = false
     @State private var isModelDeleteConfirmationPresented = false
@@ -24,22 +26,37 @@ struct CharacterDetailView: View {
 
     var body: some View {
         Form {
-            Section {
-                HStack(spacing: 16) {
-                    CharacterThumbnailView(character: character)
-                        .frame(width: 92)
-
-                    VStack(alignment: .leading, spacing: 8) {
-                        TextField("名前", text: $character.name)
-                            .font(.headline)
-                            .onSubmit(save)
-
-                        Text(character.createdAt, format: .dateTime.year().month().day())
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
+            Section("基本情報") {
+                HStack {
+                    Spacer()
+                    CharacterThumbnailView(character: character, showsName: false)
+                        .frame(width: 112)
+                    Spacer()
                 }
-                .padding(.vertical, 6)
+                .padding(.top, 6)
+                .padding(.bottom, 0)
+                .listRowSeparator(.hidden)
+
+                HStack {
+                    Text("名前")
+
+                    TextField("推しの名前", text: $draftName)
+                        .multilineTextAlignment(.trailing)
+                        .submitLabel(.done)
+                        .focused($isNameFocused)
+                        .onSubmit(commitName)
+                        .onChange(of: isNameFocused) { _, isFocused in
+                            if !isFocused {
+                                commitName()
+                            }
+                        }
+                }
+
+                LabeledContent("登録日") {
+                    Text(character.createdAt, format: .dateTime.year().month().day())
+                        .foregroundStyle(.secondary)
+                }
+                .font(.body)
             }
 
             Section("2D画像") {
@@ -191,7 +208,20 @@ struct CharacterDetailView: View {
                 ObjectCapturePreparationView(character: character)
             }
         }
-        .onAppear(perform: normalizeARBrightnessIfNeeded)
+        .toolbar {
+            ToolbarItemGroup(placement: .keyboard) {
+                Spacer()
+                Button("完了") {
+                    commitName()
+                    isNameFocused = false
+                }
+            }
+        }
+        .onAppear {
+            draftName = character.name
+            normalizeARBrightnessIfNeeded()
+        }
+        .onDisappear(perform: commitName)
     }
 
     private func shareModel() {
@@ -246,6 +276,20 @@ struct CharacterDetailView: View {
     private func save() {
         character.updatedAt = Date()
         try? modelContext.save()
+    }
+
+    private func commitName() {
+        let trimmedName = draftName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let nextName = trimmedName.isEmpty ? "推し" : trimmedName
+
+        draftName = nextName
+
+        guard character.name != nextName else {
+            return
+        }
+
+        character.name = nextName
+        save()
     }
 
     private func normalizeARBrightnessIfNeeded() {
