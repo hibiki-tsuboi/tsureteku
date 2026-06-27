@@ -8,6 +8,31 @@
 import Foundation
 import SwiftData
 
+enum CharacterARPlacementMode: String, CaseIterable, Identifiable {
+    case model3D
+    case image2D
+
+    var id: Self { self }
+
+    var title: String {
+        switch self {
+        case .model3D:
+            return "3D"
+        case .image2D:
+            return "画像"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .model3D:
+            return "cube.fill"
+        case .image2D:
+            return "photo"
+        }
+    }
+}
+
 @Model
 final class ToyCharacter {
     static let arBrightnessMultiplierRange: ClosedRange<Double> = 0.6...1.6
@@ -24,9 +49,23 @@ final class ToyCharacter {
     var modelYawDegrees: Double = 0
     var modelVerticalOffsetMeters: Double = 0
     var isARMotionEnabled: Bool = false
+    var arPlacementModeRawValue: String = CharacterARPlacementMode.model3D.rawValue
     var createdAt: Date
     var updatedAt: Date
     var lastUsedAt: Date?
+
+    var arPlacementMode: CharacterARPlacementMode {
+        get {
+            CharacterARPlacementMode(rawValue: arPlacementModeRawValue) ?? .model3D
+        }
+        set {
+            arPlacementModeRawValue = newValue.rawValue
+        }
+    }
+
+    var effectiveARPlacementMode: CharacterARPlacementMode {
+        modelFileName == nil ? .image2D : arPlacementMode
+    }
 
     var normalizedARBrightnessMultiplier: Double {
         let multiplier = arBrightnessMultiplier > 0 ? arBrightnessMultiplier : 1
@@ -48,6 +87,7 @@ final class ToyCharacter {
         modelYawDegrees: Double = 0,
         modelVerticalOffsetMeters: Double = 0,
         isARMotionEnabled: Bool = false,
+        arPlacementMode: CharacterARPlacementMode = .model3D,
         createdAt: Date = Date(),
         updatedAt: Date = Date(),
         lastUsedAt: Date? = nil
@@ -63,6 +103,7 @@ final class ToyCharacter {
         self.modelYawDegrees = modelYawDegrees
         self.modelVerticalOffsetMeters = modelVerticalOffsetMeters
         self.isARMotionEnabled = isARMotionEnabled
+        self.arPlacementModeRawValue = arPlacementMode.rawValue
         self.createdAt = createdAt
         self.updatedAt = updatedAt
         self.lastUsedAt = lastUsedAt

@@ -794,6 +794,7 @@ struct ObjectCaptureWorkflowView: View {
                         if didCompleteModel {
                             CharacterImageStore.deleteModelIfExists(fileName: character.modelFileName)
                             character.modelFileName = output.fileName
+                            character.arPlacementMode = .model3D
                             didCommitModel = true
                             if generatesThumbnailFromCapture {
                                 await applyCaptureThumbnail(fromDirectory: inputURL)

@@ -59,6 +59,20 @@ struct CharacterDetailView: View {
             }
 
             Section {
+                if character.modelFileName != nil {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("配置形式")
+
+                        Picker("配置形式", selection: placementModeBinding) {
+                            ForEach(CharacterARPlacementMode.allCases) { mode in
+                                Text(mode.title).tag(mode)
+                            }
+                        }
+                        .pickerStyle(.segmented)
+                    }
+                    .padding(.vertical, 4)
+                }
+
                 HStack {
                     Text("初期サイズ")
                     Slider(value: $character.defaultSizeMeters, in: 0.12...1.2)
@@ -98,7 +112,7 @@ struct CharacterDetailView: View {
             } header: {
                 Text("AR")
             } footer: {
-                Text("ARで新しく配置した時の推しの明るさや動きの初期状態を調整します。配置後はAR画面で1体ずつON/OFFできます。")
+                Text("ARで新しく配置した時の見え方・明るさ・動きの初期状態を調整します。配置後はAR画面で1体ずつON/OFFできます。")
             }
 
             Section("3Dモデル") {
@@ -242,6 +256,7 @@ struct CharacterDetailView: View {
 
             CharacterImageStore.deleteModelIfExists(fileName: character.modelFileName)
             character.modelFileName = fileName
+            character.arPlacementMode = .model3D
             character.modelYawDegrees = 0
             character.modelVerticalOffsetMeters = 0
             character.updatedAt = Date()
@@ -258,6 +273,19 @@ struct CharacterDetailView: View {
         character.modelVerticalOffsetMeters = 0
         character.updatedAt = Date()
         save()
+    }
+
+    private var placementModeBinding: Binding<CharacterARPlacementMode> {
+        Binding {
+            character.effectiveARPlacementMode
+        } set: { mode in
+            guard character.modelFileName != nil else {
+                return
+            }
+
+            character.arPlacementMode = mode
+            save()
+        }
     }
 
     private func save() {

@@ -544,7 +544,7 @@ struct ARCameraScreen: View {
             HStack(spacing: 10) {
                 Label(
                     selectedCharacter.name,
-                    systemImage: selectedCharacter.modelFileName == nil ? "photo" : "cube.fill"
+                    systemImage: selectedPlacementMode.systemImage
                 )
                 .font(.subheadline.weight(.semibold))
                 .lineLimit(1)
@@ -558,7 +558,7 @@ struct ARCameraScreen: View {
                     .padding(.vertical, 4)
                     .background(.thinMaterial, in: Capsule())
 
-                Text(selectedCharacter.modelFileName == nil ? "2D" : "3D")
+                Text(selectedPlacementMode.title)
                     .font(.caption.weight(.bold))
                     .foregroundStyle(.secondary)
                     .padding(.horizontal, 8)
@@ -667,7 +667,7 @@ struct ARCameraScreen: View {
             id: selectedCharacter.id,
             name: selectedCharacter.name,
             cutoutImageFileName: selectedCharacter.cutoutImageFileName,
-            modelFileName: selectedCharacter.modelFileName,
+            modelFileName: selectedPlacementMode == .model3D ? selectedCharacter.modelFileName : nil,
             defaultSizeMeters: Float(selectedCharacter.defaultSizeMeters),
             arBrightnessMultiplier: Float(selectedCharacter.normalizedARBrightnessMultiplier),
             modelYawDegrees: Float(selectedCharacter.modelYawDegrees),
@@ -683,6 +683,10 @@ struct ARCameraScreen: View {
         }
 
         return characters.first
+    }
+
+    private var selectedPlacementMode: CharacterARPlacementMode {
+        selectedCharacter?.effectiveARPlacementMode ?? .image2D
     }
 
     private func selectInitialCharacterIfNeeded() {
