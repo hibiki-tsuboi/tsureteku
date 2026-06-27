@@ -14,6 +14,8 @@ import SwiftUI
 import UIKit
 
 struct ARCameraScreen: View {
+    var sessionResetTrigger = 0
+
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \ToyCharacter.createdAt, order: .reverse) private var characters: [ToyCharacter]
 
@@ -72,6 +74,13 @@ struct ARCameraScreen: View {
         }
         .onChange(of: characters.map(\.id)) { _, _ in
             selectInitialCharacterIfNeeded()
+        }
+        .onChange(of: sessionResetTrigger) { _, newValue in
+            guard newValue > 0 else {
+                return
+            }
+
+            closeARSession()
         }
         .sheet(isPresented: $isAddingCharacter) {
             AddCharacterView()
@@ -212,11 +221,7 @@ struct ARCameraScreen: View {
                 systemImage: "xmark",
                 accessibilityLabel: "ARを閉じる"
             ) {
-                isSelfieMode = false
-                resetARSceneState()
-                withAnimation(.easeInOut(duration: 0.25)) {
-                    isARActive = false
-                }
+                closeARSession()
             }
 
             Spacer()
@@ -724,6 +729,18 @@ struct ARCameraScreen: View {
 
         withAnimation(.easeInOut(duration: 0.25)) {
             isARActive = true
+        }
+    }
+
+    private func closeARSession() {
+        isSelfieMode = false
+        isResetConfirmationPresented = false
+        isRecordingConfirmationPresented = false
+        isPreparingRecording = false
+        resetARSceneState()
+
+        withAnimation(.easeInOut(duration: 0.25)) {
+            isARActive = false
         }
     }
 
