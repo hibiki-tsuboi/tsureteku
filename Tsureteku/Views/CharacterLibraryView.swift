@@ -130,7 +130,7 @@ struct CharacterLibraryView: View {
 
     private static func metadataText(for character: ToyCharacter) -> String {
         var items = [
-            character.modelFileName == nil ? "2D" : "3D",
+            character.modelFileName == nil ? "画像のみ" : "3Dモデルあり",
             "\(Int(character.defaultSizeMeters * 100))cm"
         ]
 
