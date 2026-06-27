@@ -51,12 +51,6 @@ struct CharacterDetailView: View {
                             }
                         }
                 }
-
-                LabeledContent("登録日") {
-                    Text(character.createdAt, format: .dateTime.year().month().day())
-                        .foregroundStyle(.secondary)
-                }
-                .font(.body)
             }
 
             Section("2D画像") {
