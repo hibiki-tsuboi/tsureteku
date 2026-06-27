@@ -289,12 +289,6 @@ struct CharacterDetailView: View {
     }
 }
 
-private extension UTType {
-    static var usdzModel: UTType {
-        UTType(filenameExtension: "usdz") ?? .data
-    }
-}
-
 private struct ShareableModel: Identifiable {
     let id = UUID()
     let url: URL

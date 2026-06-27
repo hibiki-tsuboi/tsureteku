@@ -10,6 +10,7 @@ import RealityKit
 import SwiftData
 import SwiftUI
 import UIKit
+import UniformTypeIdentifiers
 
 struct AddCharacterView: View {
     @Environment(\.dismiss) private var dismiss
@@ -27,6 +28,9 @@ struct AddCharacterView: View {
     @State private var selectedPhotoItem: PhotosPickerItem?
     @State private var isCameraPresented = false
     @State private var isManualTrimPresented = false
+    @State private var isImportingModel = false
+    @State private var importedModelFileName: String?
+    @State private var importedModelDisplayName: String?
     @State private var defaultSizeMeters = ToyCharacter.initialSizeMeters
     @State private var activeProcessingID: UUID?
 
@@ -73,6 +77,7 @@ struct AddCharacterView: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("キャンセル") {
+                        discardImportedModel()
                         dismiss()
                     }
                 }
@@ -81,8 +86,17 @@ struct AddCharacterView: View {
                     if registrationMode == .photo {
                         Button("保存", action: saveCharacter)
                             .disabled(!canSave || isProcessing)
+                    } else if importedModelFileName != nil {
+                        Button("保存", action: saveImportedModelCharacter)
+                            .disabled(!canSaveImportedModel)
                     }
                 }
+            }
+            .fileImporter(
+                isPresented: $isImportingModel,
+                allowedContentTypes: [.usdzModel]
+            ) { result in
+                importModel(result)
             }
             .fullScreenCover(isPresented: $isCameraPresented) {
                 CameraCaptureView { image in
@@ -115,10 +129,13 @@ struct AddCharacterView: View {
                     fillDefaultNameIfNeeded()
                     warningMessage = nil
                     errorMessage = nil
+                } else {
+                    discardImportedModel()
                 }
             }
             .onDisappear {
                 activeProcessingID = nil
+                discardImportedModel()
             }
         }
     }
@@ -176,6 +193,28 @@ struct AddCharacterView: View {
     @ViewBuilder
     private var objectCaptureRegistrationContent: some View {
         Section {
+            Button {
+                isImportingModel = true
+            } label: {
+                Label(importedModelFileName == nil ? "3Dモデルを登録（USDZ）" : "3Dモデルを差し替え（USDZ）", systemImage: "square.and.arrow.down")
+            }
+
+            if let importedModelDisplayName {
+                Label {
+                    Text(importedModelDisplayName)
+                        .lineLimit(1)
+                } icon: {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundStyle(.green)
+                }
+            }
+        } header: {
+            Text("3Dデータ")
+        } footer: {
+            Text("USDZファイルを選ぶと、新しい推しとして登録できます。一覧用の画像はあとから詳細画面で変更できます。")
+        }
+
+        Section {
             NavigationLink {
                 NewObjectCaptureCharacterView(
                     characterName: trimmedCharacterName,
@@ -183,12 +222,12 @@ struct AddCharacterView: View {
                     onCharacterCreated: { dismiss() }
                 )
             } label: {
-                Label("3D撮影の準備へ", systemImage: "camera.aperture")
+                Label("3D撮影して作る", systemImage: "camera.aperture")
             }
             .disabled(!canStartObjectCaptureRegistration || !ObjectCaptureSession.isSupported)
 
             if ObjectCaptureSession.isSupported {
-                Label("写真登録なしで、3D撮影から推しを作成します。", systemImage: "cube.fill")
+                Label("iPhoneで撮影して、3Dモデルの推しを作成します。", systemImage: "cube.fill")
                     .font(.callout)
                     .foregroundStyle(.secondary)
             } else {
@@ -254,6 +293,10 @@ struct AddCharacterView: View {
         !trimmedCharacterName.isEmpty
     }
 
+    private var canSaveImportedModel: Bool {
+        importedModelFileName != nil && !trimmedCharacterName.isEmpty
+    }
+
     private var trimmedCharacterName: String {
         characterName.trimmingCharacters(in: .whitespacesAndNewlines)
     }
@@ -267,6 +310,22 @@ struct AddCharacterView: View {
             }
 
             process(image)
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    private func importModel(_ result: Result<URL, Error>) {
+        do {
+            let sourceURL = try result.get()
+            let fileName = try CharacterImageStore.saveModel(from: sourceURL)
+
+            discardImportedModel()
+            importedModelFileName = fileName
+            importedModelDisplayName = sourceURL.lastPathComponent
+            errorMessage = nil
+            warningMessage = nil
+            fillDefaultNameIfNeeded()
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -366,6 +425,58 @@ struct AddCharacterView: View {
             }
             errorMessage = error.localizedDescription
         }
+    }
+
+    private func saveImportedModelCharacter() {
+        guard let importedModelFileName else {
+            return
+        }
+
+        var savedOriginalFileName: String?
+        var savedCutoutFileName: String?
+        var insertedCharacter: ToyCharacter?
+
+        do {
+            let placeholderImage = CharacterPlaceholderImageFactory.make3DModelImage()
+            let originalFileName = try CharacterImageStore.save(placeholderImage, kind: .original)
+            savedOriginalFileName = originalFileName
+            let cutoutFileName = try CharacterImageStore.save(placeholderImage, kind: .cutout)
+            savedCutoutFileName = cutoutFileName
+            let now = Date()
+            let character = ToyCharacter(
+                name: trimmedCharacterName,
+                originalImageFileName: originalFileName,
+                cutoutImageFileName: cutoutFileName,
+                modelFileName: importedModelFileName,
+                defaultSizeMeters: defaultSizeMeters,
+                createdAt: now,
+                updatedAt: now
+            )
+
+            modelContext.insert(character)
+            insertedCharacter = character
+            try modelContext.save()
+            self.importedModelFileName = nil
+            importedModelDisplayName = nil
+            dismiss()
+        } catch {
+            if let insertedCharacter {
+                modelContext.delete(insertedCharacter)
+            }
+            if let savedOriginalFileName {
+                CharacterImageStore.deleteIfExists(fileName: savedOriginalFileName, kind: .original)
+            }
+            if let savedCutoutFileName {
+                CharacterImageStore.deleteIfExists(fileName: savedCutoutFileName, kind: .cutout)
+            }
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    private func discardImportedModel() {
+        CharacterImageStore.deleteModelIfExists(fileName: importedModelFileName)
+        importedModelFileName = nil
+        importedModelDisplayName = nil
     }
 }
 

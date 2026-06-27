@@ -426,7 +426,7 @@ private final class ObjectCaptureDraftCharacterStore: ObservableObject {
         var originalFileName: String?
 
         do {
-            let placeholderImage = ObjectCapturePlaceholderImageFactory.makeImage()
+            let placeholderImage = CharacterPlaceholderImageFactory.make3DModelImage()
             let savedOriginalFileName = try CharacterImageStore.save(placeholderImage, kind: .original)
             originalFileName = savedOriginalFileName
             let savedCutoutFileName = try CharacterImageStore.save(placeholderImage, kind: .cutout)
@@ -470,29 +470,6 @@ private final class ObjectCaptureDraftCharacterStore: ObservableObject {
         CharacterImageStore.deleteModelIfExists(fileName: character.modelFileName)
         CharacterImageStore.deleteObjectCaptureDirectoryIfExists(directoryName: character.objectCaptureDirectoryName)
         self.character = nil
-    }
-}
-
-private enum ObjectCapturePlaceholderImageFactory {
-    static func makeImage() -> UIImage {
-        let size = CGSize(width: 512, height: 512)
-        let renderer = UIGraphicsImageRenderer(size: size)
-
-        return renderer.image { context in
-            UIColor.clear.setFill()
-            context.fill(CGRect(origin: .zero, size: size))
-
-            let configuration = UIImage.SymbolConfiguration(pointSize: 190, weight: .semibold)
-            let symbol = UIImage(systemName: "cube.fill", withConfiguration: configuration)?
-                .withTintColor(.systemPurple, renderingMode: .alwaysOriginal)
-            let symbolSize = CGSize(width: 230, height: 230)
-            let symbolOrigin = CGPoint(
-                x: (size.width - symbolSize.width) / 2,
-                y: (size.height - symbolSize.height) / 2
-            )
-
-            symbol?.draw(in: CGRect(origin: symbolOrigin, size: symbolSize))
-        }
     }
 }
 
