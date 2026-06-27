@@ -213,6 +213,7 @@ struct ARCameraScreen: View {
                 accessibilityLabel: "ARを閉じる"
             ) {
                 isSelfieMode = false
+                resetARSceneState()
                 withAnimation(.easeInOut(duration: 0.25)) {
                     isARActive = false
                 }
@@ -550,7 +551,7 @@ struct ARCameraScreen: View {
                     .padding(.vertical, 4)
                     .background(.thinMaterial, in: Capsule())
 
-                if let selectedPlacementName {
+                if let selectedPlacementName, !isSceneEmpty {
                     Label(selectedPlacementName, systemImage: "scope")
                         .font(.caption)
                         .foregroundStyle(.secondary)
@@ -569,7 +570,7 @@ struct ARCameraScreen: View {
 
     @ViewBuilder
     private var placementTools: some View {
-        if selectedPlacementName != nil {
+        if selectedPlacementName != nil, !isSceneEmpty {
             HStack(spacing: 0) {
                 placementToolButton(systemImage: "minus.circle", accessibilityLabel: "選択中の推しを小さく") {
                     scaleDownTrigger += 1
@@ -717,12 +718,21 @@ struct ARCameraScreen: View {
     private func activateAR() {
         // 撮影プレビューを閉じた後に古い写真状態が残っていても、次回起動時に再表示しない。
         capturedPhoto = nil
+        resetARSceneState()
         // AR画面を開くたびに、推しピッカーをすぐ使えるよう展開しておく。
         isControlPanelExpanded = true
 
         withAnimation(.easeInOut(duration: 0.25)) {
             isARActive = true
         }
+    }
+
+    private func resetARSceneState() {
+        selectedPlacementName = nil
+        selectedPlacementMotionEnabled = false
+        isSceneEmpty = true
+        isCoachingActive = false
+        statusMessage = nil
     }
 
     private func toggleSelfieMode() {

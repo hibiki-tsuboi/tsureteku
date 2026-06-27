@@ -654,6 +654,12 @@ struct ARCharacterView: UIViewRepresentable {
             sceneUpdateSubscription = nil
             placementTask?.cancel()
             placementTask = nil
+            placements.forEach { $0.idleMotion.stop() }
+            placements.removeAll()
+            clearSelectedPlacement()
+            isSceneEmpty.wrappedValue = true
+            isCoachingActive.wrappedValue = false
+            setReticleVisible(false)
         }
 
         func toggleSelectedPlacementMotion() {
