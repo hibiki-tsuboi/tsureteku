@@ -27,21 +27,12 @@ struct CharacterDetailView: View {
     var body: some View {
         Form {
             Section("基本情報") {
-                HStack {
-                    Spacer()
+                HStack(spacing: 16) {
                     CharacterThumbnailView(character: character, showsName: false)
-                        .frame(width: 112)
-                    Spacer()
-                }
-                .padding(.top, 6)
-                .padding(.bottom, 0)
-                .listRowSeparator(.hidden)
+                        .frame(width: 76)
 
-                HStack {
-                    Text("名前")
-
-                    TextField("推しの名前", text: $draftName)
-                        .multilineTextAlignment(.trailing)
+                    TextField("名前", text: $draftName)
+                        .font(.body)
                         .submitLabel(.done)
                         .focused($isNameFocused)
                         .onSubmit(commitName)
@@ -50,7 +41,9 @@ struct CharacterDetailView: View {
                                 commitName()
                             }
                         }
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
+                .padding(.vertical, 4)
             }
 
             Section("2D画像") {
