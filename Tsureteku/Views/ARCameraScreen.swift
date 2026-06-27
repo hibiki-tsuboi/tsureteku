@@ -374,7 +374,16 @@ struct ARCameraScreen: View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 12) {
                 ForEach(characters) { character in
-                    CharacterThumbnailView(character: character)
+                    Button {
+                        select(character)
+                    } label: {
+                        CharacterThumbnailView(
+                            character: character,
+                            isSelected: character.id == selectedCharacterID
+                        )
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("\(character.name)を選択")
                 }
             }
             .padding(.horizontal, 24)
