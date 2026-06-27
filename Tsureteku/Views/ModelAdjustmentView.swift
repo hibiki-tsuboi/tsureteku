@@ -334,7 +334,7 @@ private struct ModelPreview3DView: UIViewRepresentable {
                 return
             }
 
-            let sizeScale = max(0.25, min(3.5, Float(modelSizeMeters / 0.34)))
+            let sizeScale = max(0.25, min(3.5, Float(modelSizeMeters / ToyCharacter.initialSizeMeters)))
             let previewScale = normalizedPreviewScale * sizeScale
             modelEntity.scale = SIMD3<Float>(repeating: previewScale)
             modelEntity.orientation = simd_quatf(angle: Float(yawDegrees) * .pi / 180, axis: [0, 1, 0])

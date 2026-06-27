@@ -27,7 +27,7 @@ struct AddCharacterView: View {
     @State private var selectedPhotoItem: PhotosPickerItem?
     @State private var isCameraPresented = false
     @State private var isManualTrimPresented = false
-    @State private var defaultSizeMeters = 0.34
+    @State private var defaultSizeMeters = ToyCharacter.initialSizeMeters
     @State private var activeProcessingID: UUID?
 
     var body: some View {

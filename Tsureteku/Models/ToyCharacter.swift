@@ -11,6 +11,7 @@ import SwiftData
 @Model
 final class ToyCharacter {
     static let arBrightnessMultiplierRange: ClosedRange<Double> = 0.6...1.6
+    static let initialSizeMeters = 0.20
 
     var id: UUID
     var name: String
@@ -18,7 +19,7 @@ final class ToyCharacter {
     var cutoutImageFileName: String
     var modelFileName: String? = nil
     var objectCaptureDirectoryName: String? = nil
-    var defaultSizeMeters: Double = 0.34
+    var defaultSizeMeters: Double = ToyCharacter.initialSizeMeters
     var arBrightnessMultiplier: Double = 1.0
     var modelYawDegrees: Double = 0
     var modelVerticalOffsetMeters: Double = 0
@@ -42,7 +43,7 @@ final class ToyCharacter {
         cutoutImageFileName: String,
         modelFileName: String? = nil,
         objectCaptureDirectoryName: String? = nil,
-        defaultSizeMeters: Double = 0.34,
+        defaultSizeMeters: Double = ToyCharacter.initialSizeMeters,
         arBrightnessMultiplier: Double = 1.0,
         modelYawDegrees: Double = 0,
         modelVerticalOffsetMeters: Double = 0,
