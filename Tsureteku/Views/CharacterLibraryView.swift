@@ -107,7 +107,7 @@ struct CharacterLibraryView: View {
                 Text(character.name)
                     .font(.headline)
 
-                Text(Self.relativeDateText(character.createdAt))
+                Text(Self.metadataText(for: character))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -128,30 +128,17 @@ struct CharacterLibraryView: View {
         return "v\(version) (\(build))"
     }
 
-    /// 今日／昨日／6/13（今年）／2025/1/1（別の年）の形式で日付を表示する。
-    private static func relativeDateText(_ date: Date) -> String {
-        let calendar = Calendar.current
+    private static func metadataText(for character: ToyCharacter) -> String {
+        var items = [
+            character.modelFileName == nil ? "2D" : "3D",
+            "\(Int(character.defaultSizeMeters * 100))cm"
+        ]
 
-        if calendar.isDateInToday(date) {
-            return "今日"
+        if character.isARMotionEnabled {
+            items.append("動きON")
         }
 
-        if calendar.isDateInYesterday(date) {
-            return "昨日"
-        }
-
-        let components = calendar.dateComponents([.year, .month, .day], from: date)
-        guard let year = components.year,
-              let month = components.month,
-              let day = components.day else {
-            return ""
-        }
-
-        if calendar.isDate(date, equalTo: Date(), toGranularity: .year) {
-            return "\(month)/\(day)"
-        }
-
-        return "\(year)/\(month)/\(day)"
+        return items.joined(separator: " ・ ")
     }
 
     private func delete(_ character: ToyCharacter) {
