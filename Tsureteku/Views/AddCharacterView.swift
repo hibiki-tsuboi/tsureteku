@@ -32,6 +32,7 @@ struct AddCharacterView: View {
     @State private var isModelImportProcessing = false
     @State private var importedModelFileName: String?
     @State private var importedModelDisplayName: String?
+    @State private var importedModelSourceThumbnailImage: UIImage?
     @State private var importedModelThumbnailImage: UIImage?
     @State private var defaultSizeMeters = ToyCharacter.initialSizeMeters
     @State private var activeProcessingID: UUID?
@@ -360,20 +361,23 @@ struct AddCharacterView: View {
             isModelImportProcessing = true
             importedModelFileName = fileName
             importedModelDisplayName = sourceURL.lastPathComponent
+            importedModelSourceThumbnailImage = nil
             importedModelThumbnailImage = nil
             errorMessage = nil
             warningMessage = nil
             fillDefaultNameIfNeeded()
 
             Task {
-                let thumbnail = await ModelThumbnailService.makeThumbnail(for: modelURL)
+                let thumbnailImages = await ModelThumbnailService.makeThumbnailImages(for: modelURL)
 
                 guard activeModelImportID == importID,
                       importedModelFileName == fileName else {
                     return
                 }
 
-                importedModelThumbnailImage = thumbnail ?? CharacterPlaceholderImageFactory.make3DModelImage()
+                let fallbackImage = CharacterPlaceholderImageFactory.make3DModelImage()
+                importedModelSourceThumbnailImage = thumbnailImages?.source ?? fallbackImage
+                importedModelThumbnailImage = thumbnailImages?.cutout ?? fallbackImage
                 isModelImportProcessing = false
                 activeModelImportID = nil
             }
@@ -490,10 +494,12 @@ struct AddCharacterView: View {
         var insertedCharacter: ToyCharacter?
 
         do {
-            let thumbnailImage = importedModelThumbnailImage ?? CharacterPlaceholderImageFactory.make3DModelImage()
-            let originalFileName = try CharacterImageStore.save(thumbnailImage, kind: .original)
+            let fallbackImage = CharacterPlaceholderImageFactory.make3DModelImage()
+            let sourceThumbnailImage = importedModelSourceThumbnailImage ?? importedModelThumbnailImage ?? fallbackImage
+            let cutoutThumbnailImage = importedModelThumbnailImage ?? sourceThumbnailImage
+            let originalFileName = try CharacterImageStore.save(sourceThumbnailImage, kind: .original)
             savedOriginalFileName = originalFileName
-            let cutoutFileName = try CharacterImageStore.save(thumbnailImage, kind: .cutout)
+            let cutoutFileName = try CharacterImageStore.save(cutoutThumbnailImage, kind: .cutout)
             savedCutoutFileName = cutoutFileName
             let now = Date()
             let character = ToyCharacter(
@@ -532,6 +538,7 @@ struct AddCharacterView: View {
         isModelImportProcessing = false
         importedModelFileName = nil
         importedModelDisplayName = nil
+        importedModelSourceThumbnailImage = nil
         importedModelThumbnailImage = nil
     }
 }
