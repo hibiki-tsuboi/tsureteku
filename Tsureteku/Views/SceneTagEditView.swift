@@ -15,6 +15,9 @@ struct SceneTagEditView: View {
 
     let photo: CapturedPhoto
 
+    /// 「自動で判定し直す」の実行中かどうか。
+    @State private var isReclassifying = false
+
     var body: some View {
         NavigationStack {
             List {
@@ -43,9 +46,19 @@ struct SceneTagEditView: View {
 
                 if photo.isSceneTagsEditedManually {
                     Section {
-                        Button("自動判定に戻す", action: revertToAutomatic)
+                        Button(action: reclassify) {
+                            HStack {
+                                Text("タグを自動で判定し直す")
+
+                                if isReclassifying {
+                                    Spacer()
+                                    ProgressView()
+                                }
+                            }
+                        }
+                        .disabled(isReclassifying)
                     } footer: {
-                        Text("次に履歴を開いたときに、自動でタグを判定し直します。")
+                        Text("手動での変更を破棄して、いますぐ自動判定をやり直します。")
                     }
                 }
             }
@@ -76,11 +89,25 @@ struct SceneTagEditView: View {
         try? modelContext.save()
     }
 
-    private func revertToAutomatic() {
-        photo.isSceneTagsEditedManually = false
-        photo.sceneClassifierVersion = 0
-        try? modelContext.save()
-        dismiss()
+    /// その場で自動判定をやり直し、結果を即座にチェックマークへ反映する。
+    /// 遅延実行（次回履歴表示時の再分類）だと押した直後に何も変わらず分かりづらいため。
+    private func reclassify() {
+        isReclassifying = true
+        Task {
+            // 分類には縮小画像で十分。履歴画面のバックフィルと同じ条件で判定する。
+            let tags: [SceneTag]
+            if let image = CapturedPhotoStore.thumbnail(named: photo.imageFileName, maxPixelSize: 512) {
+                tags = await SceneClassificationService.tags(in: image)
+            } else {
+                tags = []
+            }
+
+            photo.sceneTags = tags
+            photo.isSceneTagsEditedManually = false
+            photo.sceneClassifierVersion = SceneClassificationService.classifierVersion
+            try? modelContext.save()
+            isReclassifying = false
+        }
     }
 }
 
