@@ -780,8 +780,11 @@ struct ARCameraScreen: View {
         // 確認直後に準備中フラグを立てて操作UIを隠す。ここで隠さないと、録画開始までの
         // 待機中にシャッター等を押せてしまい、録画とプレビューが競合する。
         isPreparingRecording = true
+        triggerRecordingStartFeedback()
         Task {
-            try? await Task.sleep(for: .milliseconds(320))
+            // 開始音（約0.5秒）が鳴り終わってから収録を開始し、開始音が動画の先頭に
+            // 録り込まれないようにする。確認アラートの消えるアニメーションもこの間に終わる。
+            try? await Task.sleep(for: .milliseconds(700))
             startRecording()
         }
     }
@@ -818,7 +821,6 @@ struct ARCameraScreen: View {
                     return
                 }
 
-                triggerRecordingStartFeedback()
                 isRecordingReadyToStop = true
             }
         }
@@ -884,7 +886,8 @@ struct ARCameraScreen: View {
         }
     }
 
-    /// ReplayKitの録画開始が成功したタイミングで、録画開始が分かる音と触覚を返す。
+    /// 録画開始操作を受け付けたタイミングで、開始音と触覚を返す。
+    /// ReplayKitの収録開始後に鳴らすと開始音が動画の先頭に録り込まれるため、必ず開始前に鳴らす。
     private func triggerRecordingStartFeedback() {
         UIImpactFeedbackGenerator(style: .medium).impactOccurred()
         AudioServicesPlaySystemSound(Self.recordingStartSoundID)
