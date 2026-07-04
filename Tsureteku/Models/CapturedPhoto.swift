@@ -30,6 +30,8 @@ final class CapturedPhoto {
     /// 最後にシーン分類を実行した分類器バージョン。0 は未分類。
     /// 判定ロジックを変えたら `SceneClassificationService.classifierVersion` を上げると全件再分類される。
     var sceneClassifierVersion: Int = 0
+    /// タグをユーザーが手動編集したか。true のあいだは自動判定で上書きしない。
+    var isSceneTagsEditedManually: Bool = false
 
     /// 写真か動画か。未知値・既存データは写真として扱う。
     var mediaType: CapturedMediaType {

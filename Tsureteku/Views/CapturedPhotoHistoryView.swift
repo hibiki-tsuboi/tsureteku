@@ -164,14 +164,20 @@ struct CapturedPhotoHistoryView: View {
         .buttonStyle(.plain)
     }
 
+    /// 自動分類の対象。手動編集済みのメディアは上書きしない。
+    private func needsClassification(_ photo: CapturedPhoto) -> Bool {
+        !photo.isSceneTagsEditedManually
+            && photo.sceneClassifierVersion < SceneClassificationService.classifierVersion
+    }
+
     private var unclassifiedPhotoIDs: [UUID] {
-        photos.filter { $0.sceneClassifierVersion < SceneClassificationService.classifierVersion }.map(\.id)
+        photos.filter(needsClassification).map(\.id)
     }
 
     /// 未分類（または旧バージョンで分類済み）のメディアをシーン分類する。動画はポスター画像で判定する。
     /// モデルの更新は最後にまとめて行い、途中の @Query 更新でこのタスクが再起動し続けるのを避ける。
     private func classifyUnclassifiedPhotos() async {
-        let targets = photos.filter { $0.sceneClassifierVersion < SceneClassificationService.classifierVersion }
+        let targets = photos.filter(needsClassification)
         guard !targets.isEmpty else {
             return
         }
@@ -407,6 +413,7 @@ private struct CapturedPhotoDetailView: View {
     @State private var loadFailed = false
     @State private var isShareSheetPresented = false
     @State private var isDeleteConfirmationPresented = false
+    @State private var isTagEditorPresented = false
 
     private var isVideo: Bool { photo.mediaType == .video }
 
@@ -448,6 +455,13 @@ private struct CapturedPhotoDetailView: View {
         .toolbar {
             ToolbarItemGroup(placement: .primaryAction) {
                 Button {
+                    isTagEditorPresented = true
+                } label: {
+                    Image(systemName: "tag")
+                }
+                .accessibilityLabel("タグを編集")
+
+                Button {
                     isShareSheetPresented = true
                 } label: {
                     Image(systemName: "square.and.arrow.up")
@@ -462,6 +476,9 @@ private struct CapturedPhotoDetailView: View {
                 }
                 .accessibilityLabel("削除")
             }
+        }
+        .sheet(isPresented: $isTagEditorPresented) {
+            SceneTagEditView(photo: photo)
         }
         .sheet(isPresented: $isShareSheetPresented) {
             if isVideo {
