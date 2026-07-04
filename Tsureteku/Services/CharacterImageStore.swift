@@ -39,7 +39,7 @@ enum CharacterImageStore {
         }
     }
 
-    static func save(_ image: UIImage, kind: ImageKind) throws -> String {
+    nonisolated static func save(_ image: UIImage, kind: ImageKind) throws -> String {
         let fileName = UUID().uuidString + ".png"
         let url = try url(for: fileName, kind: kind)
 
@@ -68,12 +68,12 @@ enum CharacterImageStore {
         return ImageThumbnailCache.shared.thumbnail(at: url, maxPixelSize: maxPixelSize)
     }
 
-    static func url(for fileName: String, kind: ImageKind) throws -> URL {
+    nonisolated static func url(for fileName: String, kind: ImageKind) throws -> URL {
         let directoryURL = try directoryURL(for: kind)
         return directoryURL.appendingPathComponent(fileName)
     }
 
-    static func deleteIfExists(fileName: String, kind: ImageKind) {
+    nonisolated static func deleteIfExists(fileName: String, kind: ImageKind) {
         guard let url = try? url(for: fileName, kind: kind) else {
             return
         }
@@ -81,7 +81,7 @@ enum CharacterImageStore {
         try? FileManager.default.removeItem(at: url)
     }
 
-    static func saveModel(from sourceURL: URL) throws -> String {
+    nonisolated static func saveModel(from sourceURL: URL) throws -> String {
         guard sourceURL.pathExtension.lowercased() == "usdz" else {
             throw StoreError.unsupportedModelFile
         }
@@ -104,16 +104,16 @@ enum CharacterImageStore {
         return fileName
     }
 
-    static func modelURL(for fileName: String) throws -> URL {
+    nonisolated static func modelURL(for fileName: String) throws -> URL {
         try fileURL(for: fileName, kind: .model)
     }
 
-    static func newModelURL() throws -> (fileName: String, url: URL) {
+    nonisolated static func newModelURL() throws -> (fileName: String, url: URL) {
         let fileName = UUID().uuidString + ".usdz"
         return (fileName, try fileURL(for: fileName, kind: .model))
     }
 
-    static func deleteModelIfExists(fileName: String?) {
+    nonisolated static func deleteModelIfExists(fileName: String?) {
         guard let fileName,
               let url = try? fileURL(for: fileName, kind: .model) else {
             return
@@ -122,7 +122,7 @@ enum CharacterImageStore {
         try? FileManager.default.removeItem(at: url)
     }
 
-    static func newObjectCaptureDirectory() throws -> (directoryName: String, url: URL) {
+    nonisolated static func newObjectCaptureDirectory() throws -> (directoryName: String, url: URL) {
         let directoryName = UUID().uuidString
         let directoryURL = try directoryURL(for: directoryName, kind: .objectCapture)
 
@@ -138,11 +138,11 @@ enum CharacterImageStore {
         return (directoryName, directoryURL)
     }
 
-    static func objectCaptureDirectoryURL(for directoryName: String) throws -> URL {
+    nonisolated static func objectCaptureDirectoryURL(for directoryName: String) throws -> URL {
         try directoryURL(for: directoryName, kind: .objectCapture)
     }
 
-    static func deleteObjectCaptureDirectoryIfExists(directoryName: String?) {
+    nonisolated static func deleteObjectCaptureDirectoryIfExists(directoryName: String?) {
         guard let directoryName,
               let url = try? directoryURL(for: directoryName, kind: .objectCapture) else {
             return
@@ -151,7 +151,7 @@ enum CharacterImageStore {
         try? FileManager.default.removeItem(at: url)
     }
 
-    private static func directoryURL(for kind: ImageKind) throws -> URL {
+    private nonisolated static func directoryURL(for kind: ImageKind) throws -> URL {
         let directoryURL = try charactersBaseURL()
             .appendingPathComponent(kind.rawValue, isDirectory: true)
 
@@ -163,13 +163,13 @@ enum CharacterImageStore {
         return directoryURL
     }
 
-    private static func directoryURL(for directoryName: String, kind: DirectoryKind) throws -> URL {
+    private nonisolated static func directoryURL(for directoryName: String, kind: DirectoryKind) throws -> URL {
         try charactersBaseURL()
             .appendingPathComponent(kind.rawValue, isDirectory: true)
             .appendingPathComponent(directoryName, isDirectory: true)
     }
 
-    private static func fileURL(for fileName: String, kind: FileKind) throws -> URL {
+    private nonisolated static func fileURL(for fileName: String, kind: FileKind) throws -> URL {
         let directoryURL = try charactersBaseURL()
             .appendingPathComponent(kind.rawValue, isDirectory: true)
 
@@ -181,7 +181,7 @@ enum CharacterImageStore {
         return directoryURL.appendingPathComponent(fileName)
     }
 
-    private static func charactersBaseURL() throws -> URL {
+    private nonisolated static func charactersBaseURL() throws -> URL {
         let baseURL = try FileManager.default.url(
             for: .applicationSupportDirectory,
             in: .userDomainMask,

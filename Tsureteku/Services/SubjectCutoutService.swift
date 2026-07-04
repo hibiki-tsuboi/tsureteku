@@ -28,7 +28,7 @@ enum SubjectCutoutService {
         }
     }
 
-    static func makeCutout(from image: UIImage) throws -> UIImage {
+    nonisolated static func makeCutout(from image: UIImage) throws -> UIImage {
         guard let cgImage = image.cgImage else {
             throw CutoutError.missingCGImage
         }
@@ -64,7 +64,7 @@ enum SubjectCutoutService {
 }
 
 private extension CGImagePropertyOrientation {
-    init(_ orientation: UIImage.Orientation) {
+    nonisolated init(_ orientation: UIImage.Orientation) {
         switch orientation {
         case .up:
             self = .up

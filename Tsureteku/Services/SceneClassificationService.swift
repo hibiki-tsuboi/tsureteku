@@ -57,7 +57,7 @@ enum SceneClassificationService {
 
         // 第1段階: Apple 推奨の precision/recall フィルタで「高精度で言い切れるラベル」だけを残す。
         let confidentIdentifiers = observations
-            .filter { (try? $0.hasMinimumRecall(0.01, forPrecision: 0.9)) == true }
+            .filter { $0.hasMinimumRecall(0.01, forPrecision: 0.9) }
             .map { $0.identifier.lowercased() }
 
         let confidentTags = tags(matching: confidentIdentifiers)
@@ -68,7 +68,7 @@ enum SceneClassificationService {
         // 第2段階: 1つも付かなかったときだけ基準を緩め、最有力の1タグだけ採用する。
         // 「タグなし」を減らしつつ、確度の低いタグが複数混ざるのは防ぐ。
         let relaxedIdentifiers = observations
-            .filter { (try? $0.hasMinimumRecall(0.01, forPrecision: 0.7)) == true }
+            .filter { $0.hasMinimumRecall(0.01, forPrecision: 0.7) }
             .map { $0.identifier.lowercased() }
 
         if let fallbackTag = firstTag(matching: relaxedIdentifiers) {

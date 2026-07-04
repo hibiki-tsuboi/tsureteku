@@ -1057,7 +1057,7 @@ struct ARCharacterView: UIViewRepresentable {
             root.addChild(shadow)
             root.addChild(selectionMarker)
 
-            let anchor = AnchorEntity(raycastResult: result)
+            let anchor = AnchorEntity(world: result.worldTransform)
             anchor.addChild(root)
             arView.scene.addAnchor(anchor)
             arView.installGestures([.translation, .rotation, .scale], for: root)
@@ -1158,7 +1158,7 @@ struct ARCharacterView: UIViewRepresentable {
             let selectionMarker = makeSelectionMarker(width: width * 1.08, depth: depth * 1.08, baseY: baseY)
             root.addChild(selectionMarker)
 
-            let anchor = AnchorEntity(raycastResult: result)
+            let anchor = AnchorEntity(world: result.worldTransform)
             anchor.addChild(root)
             arView.scene.addAnchor(anchor)
             arView.installGestures([.translation, .rotation, .scale], for: root)

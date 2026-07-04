@@ -8,7 +8,7 @@
 import UIKit
 
 enum ImagePreparation {
-    static func normalizedAndScaled(_ image: UIImage, maxPixelLength: CGFloat = 1_800) -> UIImage {
+    nonisolated static func normalizedAndScaled(_ image: UIImage, maxPixelLength: CGFloat = 1_800) -> UIImage {
         let normalizedImage = normalize(image)
         let longestSide = max(normalizedImage.size.width, normalizedImage.size.height)
 
@@ -25,7 +25,7 @@ enum ImagePreparation {
         return render(normalizedImage, size: targetSize)
     }
 
-    private static func normalize(_ image: UIImage) -> UIImage {
+    private nonisolated static func normalize(_ image: UIImage) -> UIImage {
         guard image.imageOrientation != .up else {
             return image
         }
@@ -33,7 +33,7 @@ enum ImagePreparation {
         return render(image, size: image.size)
     }
 
-    private static func render(_ image: UIImage, size: CGSize) -> UIImage {
+    private nonisolated static func render(_ image: UIImage, size: CGSize) -> UIImage {
         let format = UIGraphicsImageRendererFormat.default()
         format.opaque = false
         format.scale = 1

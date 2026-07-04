@@ -714,8 +714,6 @@ struct ObjectCaptureWorkflowView: View {
 
             var configuration = ObjectCaptureSession.Configuration()
             configuration.isOverCaptureEnabled = true
-            session.shouldPlayHaptics = true
-            session.isAutoCaptureEnabled = true
             session.start(imagesDirectory: captureDirectory.url, configuration: configuration)
 
             character.objectCaptureDirectoryName = captureDirectory.directoryName
