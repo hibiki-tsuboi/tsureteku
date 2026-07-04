@@ -232,8 +232,10 @@ struct ARCharacterView: UIViewRepresentable {
         private var placementTask: Task<Void, Never>?
         private weak var coachingOverlay: ARCoachingOverlayView?
         private var selfieRenderedAsset: CharacterARAsset?
-        /// 配置演出のキラキラ（Reality Composer Proのシーン）。初回ロード後は使い回す。
-        private var sparkleTemplate: Entity?
+        /// 配置演出のキラキラの設計値（Reality Composer ProのSparkleシーン由来）。初回ロード後は使い回す。
+        private var sparkleDesign: SparkleDesign?
+        /// 再生中のキラキラの粒。毎フレーム更新で自前シミュレーションする。
+        private var sparkleParticles: [SparkleParticle] = []
         private var selfieSize: Float?
         private var selfieScaleDivisor: Float = 1
         private var selfieUnscaledHeight: Float = 1
@@ -324,6 +326,7 @@ struct ARCharacterView: UIViewRepresentable {
                 }
                 self.updateReticle(in: arView)
                 self.updateIdleAnimations(deltaTime: event.deltaTime)
+                self.updateSparkleParticles(deltaTime: event.deltaTime)
             }
 
             if isSelfieMode {
@@ -615,7 +618,7 @@ struct ARCharacterView: UIViewRepresentable {
                 switch outcome {
                 case .success(let placement):
                     self.selectPlacement(placement)
-                    self.playPlacementSparkle(for: placement)
+                    self.playPlacementSparkle(at: result.worldTransform, in: arView)
                     self.onStatus("\(placement.name)を配置しました。")
                 case .failure(let error):
                     self.onStatus(error.localizedDescription)
@@ -623,32 +626,134 @@ struct ARCharacterView: UIViewRepresentable {
             }
         }
 
-        /// 配置した推しの周りにキラキラを一度だけ再生する。演出なので失敗しても何もしない。
-        private func playPlacementSparkle(for placement: PlacedCharacter) {
-            Task { @MainActor [weak self] in
-                guard let self, let template = await self.loadSparkleTemplate() else {
+        /// タップした配置点を起点にキラキラを一度だけ再生する。演出なので失敗しても何もしない。
+        /// iOS 26.1以降のRealityKitには、ARViewでParticleEmitterComponentの粒がエミッタ位置を
+        /// 無視した場所に描画される不具合があるため、粒は通常のEntityとして自前のフレーム更新で動かす。
+        /// 見た目のパラメータはRCPのSparkleシーンから読む（RCPで編集すれば反映される）。
+        private func playPlacementSparkle(at worldTransform: simd_float4x4, in arView: ARView) {
+            Task { @MainActor [weak self, weak arView] in
+                guard let self, let arView, let design = await self.loadSparkleDesign() else {
                     return
                 }
 
-                let sparkle = template.clone(recursive: true)
-                let bounds = placement.entity.visualBounds(relativeTo: placement.anchor)
-                sparkle.position = bounds.center
-                placement.anchor.addChild(sparkle)
+                var position = SIMD3<Float>(
+                    worldTransform.columns.3.x,
+                    worldTransform.columns.3.y,
+                    worldTransform.columns.3.z
+                )
+                // 床置きで粒の下半分が面に埋もれないよう、少しだけ浮かせる。
+                position.y += 0.06
 
-                // バースト（発生0.7秒＋寿命約1秒）が終わった頃に取り除く。
-                try? await Task.sleep(for: .seconds(2))
-                sparkle.removeFromParent()
+                self.spawnSparkleBurst(at: position, in: arView, design: design)
             }
         }
 
-        private func loadSparkleTemplate() async -> Entity? {
-            if let sparkleTemplate {
-                return sparkleTemplate
+        private func loadSparkleDesign() async -> SparkleDesign? {
+            if let sparkleDesign {
+                return sparkleDesign
             }
 
-            let template = try? await Entity(named: "Sparkle", in: tsuretekuContentBundle)
-            sparkleTemplate = template
-            return template
+            guard let scene = try? await Entity(named: "Sparkle", in: tsuretekuContentBundle),
+                  let emitter = firstParticleEmitter(in: scene) else {
+                return nil
+            }
+
+            let design = SparkleDesign(from: emitter)
+            sparkleDesign = design
+            return design
+        }
+
+        private func firstParticleEmitter(in entity: Entity) -> ParticleEmitterComponent? {
+            if let emitter = entity.components[ParticleEmitterComponent.self] {
+                return emitter
+            }
+
+            for child in entity.children {
+                if let emitter = firstParticleEmitter(in: child) {
+                    return emitter
+                }
+            }
+
+            return nil
+        }
+
+        private static let sparkleParticleMesh = MeshResource.generateSphere(radius: 0.5)
+
+        private func spawnSparkleBurst(at position: SIMD3<Float>, in arView: ARView, design: SparkleDesign) {
+            let anchor = AnchorEntity(world: position)
+            arView.scene.addAnchor(anchor)
+
+            let materials = design.colors.map { UnlitMaterial(color: $0) }
+            for _ in 0..<design.count {
+                let direction = Self.randomUnitVector()
+                let speed = max(0.05, design.speed + Float.random(in: -design.speedVariation...design.speedVariation))
+                let scale = max(0.002, design.size + Float.random(in: -design.sizeVariation...design.sizeVariation))
+                let lifeSpan = max(0.15, design.lifeSpan + TimeInterval.random(in: -design.lifeSpanVariation...design.lifeSpanVariation))
+                let entity = ModelEntity(mesh: Self.sparkleParticleMesh, materials: [materials.randomElement() ?? UnlitMaterial()])
+                entity.position = direction * Float.random(in: 0...design.emitRadius)
+                entity.scale = SIMD3<Float>(repeating: scale)
+                anchor.addChild(entity)
+                sparkleParticles.append(
+                    SparkleParticle(
+                        entity: entity,
+                        velocity: direction * speed,
+                        age: 0,
+                        lifeSpan: lifeSpan,
+                        baseScale: scale
+                    )
+                )
+            }
+
+            // 粒がすべて消えた頃にアンカーごと後始末する。
+            Task { @MainActor [weak arView] in
+                try? await Task.sleep(for: .seconds(2))
+                arView?.scene.removeAnchor(anchor)
+            }
+        }
+
+        private func updateSparkleParticles(deltaTime: TimeInterval) {
+            guard !sparkleParticles.isEmpty, let design = sparkleDesign else {
+                return
+            }
+
+            let dt = Float(deltaTime)
+            var survivors: [SparkleParticle] = []
+            survivors.reserveCapacity(sparkleParticles.count)
+
+            for var particle in sparkleParticles {
+                particle.age += deltaTime
+                guard particle.age < particle.lifeSpan else {
+                    particle.entity.removeFromParent()
+                    continue
+                }
+
+                particle.velocity += design.acceleration * dt
+                particle.velocity *= max(0, 1 - design.damping * dt)
+                particle.entity.position += particle.velocity * dt
+
+                // 寿命に向けて縮めて消えたように見せる（不透明度アニメーションの代わり）。
+                let progress = Float(particle.age / particle.lifeSpan)
+                let sizeFactor = 1 + (design.endSizeMultiplier - 1) * pow(progress, design.endSizePower)
+                particle.entity.scale = SIMD3<Float>(repeating: particle.baseScale * max(0, sizeFactor))
+
+                survivors.append(particle)
+            }
+
+            sparkleParticles = survivors
+        }
+
+        private static func randomUnitVector() -> SIMD3<Float> {
+            while true {
+                let vector = SIMD3<Float>(
+                    Float.random(in: -1...1),
+                    Float.random(in: -1...1),
+                    Float.random(in: -1...1)
+                )
+                let lengthSquared = simd_length_squared(vector)
+                if lengthSquared > 0.0001 && lengthSquared <= 1 {
+                    return vector / lengthSquared.squareRoot()
+                }
+            }
         }
 
         func capture(in arView: ARView) {
@@ -1354,6 +1459,86 @@ struct ARCharacterView: UIViewRepresentable {
             }
 
             return abs(value / baseValue)
+        }
+
+        /// RCPのSparkleシーンのエミッタ設定を、自前シミュレーション用に写し取ったもの。
+        private struct SparkleDesign {
+            let count: Int
+            let speed: Float
+            let speedVariation: Float
+            let emitRadius: Float
+            let size: Float
+            let sizeVariation: Float
+            let endSizeMultiplier: Float
+            let endSizePower: Float
+            let lifeSpan: TimeInterval
+            let lifeSpanVariation: TimeInterval
+            let damping: Float
+            let acceleration: SIMD3<Float>
+            let colors: [UIColor]
+
+            init(from emitter: ParticleEmitterComponent) {
+                var emitDuration: TimeInterval = 0.12
+                switch emitter.timing {
+                case .once(_, let emit):
+                    emitDuration = emit.duration
+                case .repeating(_, let emit, _):
+                    emitDuration = emit.duration
+                @unknown default:
+                    break
+                }
+
+                let shapeSize = emitter.emitterShapeSize
+                count = min(72, max(1, Int(Double(emitter.mainEmitter.birthRate) * emitDuration)))
+                speed = emitter.speed
+                speedVariation = abs(emitter.speedVariation)
+                emitRadius = max(0.005, max(shapeSize.x, max(shapeSize.y, shapeSize.z)))
+                size = emitter.mainEmitter.size
+                sizeVariation = abs(emitter.mainEmitter.sizeVariation)
+                endSizeMultiplier = emitter.mainEmitter.sizeMultiplierAtEndOfLifespan
+                endSizePower = max(0.1, emitter.mainEmitter.sizeMultiplierAtEndOfLifespanPower)
+                lifeSpan = emitter.mainEmitter.lifeSpan
+                lifeSpanVariation = abs(emitter.mainEmitter.lifeSpanVariation)
+                damping = emitter.mainEmitter.dampingFactor
+                acceleration = emitter.mainEmitter.acceleration
+
+                func colorValues(_ value: ParticleEmitterComponent.ParticleEmitter.ParticleColor.ColorValue) -> [UIColor] {
+                    switch value {
+                    case .single(let color):
+                        return [color]
+                    case .random(let a, let b):
+                        return [a, b]
+                    @unknown default:
+                        return []
+                    }
+                }
+
+                var extracted: [UIColor] = []
+                switch emitter.mainEmitter.color {
+                case .constant(let value):
+                    extracted = colorValues(value)
+                case .evolving(let start, _):
+                    extracted = colorValues(start)
+                @unknown default:
+                    break
+                }
+
+                colors = extracted.isEmpty
+                    ? [
+                        UIColor(red: 1, green: 0.85, blue: 0.45, alpha: 1),
+                        UIColor(red: 1, green: 0.7, blue: 0.85, alpha: 1)
+                    ]
+                    : extracted
+            }
+        }
+
+        /// 再生中のキラキラの粒1つぶん。
+        private struct SparkleParticle {
+            let entity: ModelEntity
+            var velocity: SIMD3<Float>
+            var age: TimeInterval
+            let lifeSpan: TimeInterval
+            let baseScale: Float
         }
 
         private struct PlacedCharacter {
