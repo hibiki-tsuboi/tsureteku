@@ -28,7 +28,7 @@ xcodebuild -project Tsureteku.xcodeproj -scheme Tsureteku test -destination 'pla
 Open in Xcode: `open Tsureteku.xcodeproj`
 
 Notes:
-- Deployment target is **iOS 18.0**.
+- Deployment target is **iOS 26.0**.
 - AR, the camera, and Object Capture (3D scanning) require a **physical device** — the simulator can only build/run the non-AR UI.
 - The Xcode project uses a file-system-synchronized group, so files added under `Tsureteku/` are picked up automatically (no manual `.pbxproj` edits needed). The local package under `Packages/` is referenced explicitly in the `.pbxproj`.
 
