@@ -375,6 +375,14 @@ struct ARCharacterView: UIViewRepresentable {
                 configuration.frameSemantics.insert(.personSegmentationWithDepth)
             }
 
+            // LiDAR搭載機では空間メッシュを取得し、机や壁の裏に推しが隠れるようにする。
+            if ARWorldTrackingConfiguration.supportsSceneReconstruction(.mesh) {
+                configuration.sceneReconstruction = .mesh
+                arView.environment.sceneUnderstanding.options.insert(.occlusion)
+            } else {
+                arView.environment.sceneUnderstanding.options.remove(.occlusion)
+            }
+
             arView.session.run(configuration, options: [.removeExistingAnchors, .resetTracking])
 
             coachingOverlay?.goal = .anyPlane
