@@ -21,6 +21,8 @@ struct CapturedPhotoHistoryView: View {
     /// 選択中のメディアID。
     @State private var selectedIDs: Set<UUID> = []
     @State private var isBulkDeleteConfirmationPresented = false
+    /// 絞り込み中のシーンタグ。nil はすべて表示。
+    @State private var selectedSceneTag: SceneTag?
 
     private var columns: [GridItem] {
         // iPad（regular幅）では1セルが小さくなりすぎないよう最小幅を広げる。
@@ -35,12 +37,29 @@ struct CapturedPhotoHistoryView: View {
                     emptyState
                 } else {
                     ScrollView {
+                        // チップはピン留めせずスクロール内容の先頭に置き、
+                        // ナビゲーションの「履歴」タイトルを隠さないようにする。
+                        // 選択モード中は絞り込みを触らせない（全選択との齟齬を避ける）。
+                        if !isSelecting && !availableSceneTags.isEmpty {
+                            sceneTagFilterBar
+                        }
+
                         LazyVGrid(columns: columns, spacing: 12) {
-                            ForEach(photos) { photo in
+                            ForEach(filteredPhotos) { photo in
                                 gridItem(for: photo)
                             }
                         }
-                        .padding(16)
+                        .padding([.horizontal, .bottom], 16)
+                        .padding(.top, availableSceneTags.isEmpty ? 16 : 6)
+
+                        if filteredPhotos.isEmpty {
+                            ContentUnavailableView(
+                                "このタグの写真はまだないよ",
+                                systemImage: "tag.slash",
+                                description: Text("ほかのタグを選んでみてね。")
+                            )
+                            .padding(.top, 40)
+                        }
                     }
                     .background(Color(.systemGroupedBackground))
                 }
@@ -61,7 +80,117 @@ struct CapturedPhotoHistoryView: View {
             } message: {
                 Text("削除した写真と動画は元に戻せません。")
             }
+            // 未分類の写真が増えたら（新規撮影・初回起動時の既存分）自動でシーン分類する。
+            .task(id: unclassifiedPhotoIDs) {
+                await classifyUnclassifiedPhotos()
+            }
+            .onChange(of: availableSceneTags) { _, newTags in
+                // 絞り込み中のタグが（削除などで）消えたら「すべて」へ戻す。
+                if let selectedSceneTag, !newTags.contains(selectedSceneTag) {
+                    self.selectedSceneTag = nil
+                }
+            }
         }
+    }
+
+    // MARK: - シーンタグ絞り込み
+
+    private var filteredPhotos: [CapturedPhoto] {
+        guard let selectedSceneTag else {
+            return photos
+        }
+
+        return photos.filter { $0.sceneTags.contains(selectedSceneTag) }
+    }
+
+    /// 現在の履歴に1件でも存在するタグだけをチップに出す。
+    private var availableSceneTags: [SceneTag] {
+        let existing = Set(photos.flatMap(\.sceneTags))
+        return SceneTag.allCases.filter { existing.contains($0) }
+    }
+
+    private var sceneTagFilterBar: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                sceneTagChip(label: "すべて", iconName: nil, isSelected: selectedSceneTag == nil) {
+                    selectedSceneTag = nil
+                }
+
+                ForEach(availableSceneTags, id: \.self) { tag in
+                    sceneTagChip(
+                        label: tag.displayName,
+                        iconName: tag.iconName,
+                        isSelected: selectedSceneTag == tag
+                    ) {
+                        selectedSceneTag = tag
+                    }
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+        }
+    }
+
+    private func sceneTagChip(
+        label: String,
+        iconName: String?,
+        isSelected: Bool,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            HStack(spacing: 4) {
+                if let iconName {
+                    Image(systemName: iconName)
+                        .font(.caption)
+                }
+                Text(label)
+                    .font(.subheadline.weight(.semibold))
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 7)
+            .background(isSelected ? AnyShapeStyle(BrandColor.purple) : AnyShapeStyle(.background), in: Capsule())
+            .foregroundStyle(isSelected ? .white : .primary)
+            .overlay {
+                if !isSelected {
+                    Capsule().stroke(Color(.systemGray4), lineWidth: 1)
+                }
+            }
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var unclassifiedPhotoIDs: [UUID] {
+        photos.filter { $0.sceneClassifierVersion < SceneClassificationService.classifierVersion }.map(\.id)
+    }
+
+    /// 未分類（または旧バージョンで分類済み）のメディアをシーン分類する。動画はポスター画像で判定する。
+    /// モデルの更新は最後にまとめて行い、途中の @Query 更新でこのタスクが再起動し続けるのを避ける。
+    private func classifyUnclassifiedPhotos() async {
+        let targets = photos.filter { $0.sceneClassifierVersion < SceneClassificationService.classifierVersion }
+        guard !targets.isEmpty else {
+            return
+        }
+
+        var results: [(photo: CapturedPhoto, tags: [SceneTag])] = []
+        for photo in targets {
+            // 分類には縮小画像で十分。フルサイズ読み込みを避けてメモリと時間を節約する。
+            guard let image = CapturedPhotoStore.thumbnail(named: photo.imageFileName, maxPixelSize: 512) else {
+                results.append((photo, []))
+                continue
+            }
+
+            let tags = await SceneClassificationService.tags(in: image)
+            if Task.isCancelled {
+                return
+            }
+            results.append((photo, tags))
+        }
+
+        for (photo, tags) in results {
+            photo.sceneTags = tags
+            photo.sceneClassifierVersion = SceneClassificationService.classifierVersion
+        }
+        try? modelContext.save()
     }
 
     @ViewBuilder
@@ -142,7 +271,7 @@ struct CapturedPhotoHistoryView: View {
     }
 
     private var allSelected: Bool {
-        !photos.isEmpty && selectedIDs.count == photos.count
+        !filteredPhotos.isEmpty && selectedIDs.count == filteredPhotos.count
     }
 
     private func toggleSelection(_ photo: CapturedPhoto) {
@@ -157,7 +286,7 @@ struct CapturedPhotoHistoryView: View {
         if allSelected {
             selectedIDs.removeAll()
         } else {
-            selectedIDs = Set(photos.map(\.id))
+            selectedIDs = Set(filteredPhotos.map(\.id))
         }
     }
 
@@ -238,6 +367,12 @@ private struct CapturedPhotoGridCell: View {
             Text(photo.createdAt, format: .dateTime.year().month().day().hour().minute())
                 .font(.caption)
                 .foregroundStyle(.secondary)
+                .lineLimit(1)
+
+            // タグなしでも同じ高さの行を置き、横並びのセルの高さを揃える。
+            Text(photo.sceneTags.isEmpty ? " " : photo.sceneTags.map(\.displayName).joined(separator: " · "))
+                .font(.caption2)
+                .foregroundStyle(BrandColor.purple)
                 .lineLimit(1)
         }
     }

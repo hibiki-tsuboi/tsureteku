@@ -25,11 +25,22 @@ final class CapturedPhoto {
     /// 既存データ（生値なし）は写真として扱えるようデフォルト値を持たせ、軽量マイグレーションで吸収する。
     var mediaTypeRawValue: String = CapturedMediaType.photo.rawValue
     var createdAt: Date
+    /// シーン自動分類で付いたタグの生値。表示・絞り込みには `sceneTags` を使う。
+    var sceneTagRawValues: [String] = []
+    /// 最後にシーン分類を実行した分類器バージョン。0 は未分類。
+    /// 判定ロジックを変えたら `SceneClassificationService.classifierVersion` を上げると全件再分類される。
+    var sceneClassifierVersion: Int = 0
 
     /// 写真か動画か。未知値・既存データは写真として扱う。
     var mediaType: CapturedMediaType {
         get { CapturedMediaType(rawValue: mediaTypeRawValue) ?? .photo }
         set { mediaTypeRawValue = newValue.rawValue }
+    }
+
+    /// シーン自動分類のタグ。未知値は無視する。
+    var sceneTags: [SceneTag] {
+        get { sceneTagRawValues.compactMap(SceneTag.init(rawValue:)) }
+        set { sceneTagRawValues = newValue.map(\.rawValue) }
     }
 
     init(
