@@ -11,7 +11,33 @@
 - **価格**: 無料 (Free)
 - **年齢制限**: 4+ (なし)
 
-## App Store 提出用メタデータ
+## 使用技術
+
+Apple標準フレームワークのみで構成されており、外部ライブラリへの依存はありません。
+
+### UI・データ
+
+- **SwiftUI** — アプリ全体のUI構築
+- **SwiftData** — 推し（キャラクター）や撮影履歴のオンデバイス永続化
+- **UIKit** — SwiftUIから利用できない画像処理・ビュー連携（`UIViewRepresentable` など）
+
+### AR・3D
+
+- **ARKit** — ワールドトラッキング / フェイストラッキングによるARセッション管理
+- **Scene Reconstruction**（ARKit） — LiDARによる周囲のメッシュ復元。現実の物体でキャラクターが隠れるオクルージョンに利用（対応端末のみ）
+- **RealityKit** — キャラクターの3D表示、人物オクルージョン、アニメーション
+- **Object Capture**（RealityKit） — ぬいぐるみをカメラで撮影して3Dモデル（USDZ）を生成
+- **QuickLook Thumbnailing** — USDZモデルからのサムネイル生成
+
+### 画像・カメラ・メディア
+
+- **Vision** — 写真からの被写体自動切り抜き（前景マスク）
+- **Core Image** — 画像の加工・フィルタ処理
+- **AVFoundation / AVKit** — カメラ撮影、動画のポスター画像生成・再生
+- **ReplayKit** — AR画面の動画撮影（画面収録）
+- **Photos / PhotosUI** — フォトライブラリからの写真選択と保存
+
+
 
 ### サブタイトル (30文字以内)
 ```text
