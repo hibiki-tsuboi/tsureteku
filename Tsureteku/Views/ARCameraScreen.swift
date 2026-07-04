@@ -829,7 +829,7 @@ struct ARCameraScreen: View {
             return
         }
 
-        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        triggerRecordingStopFeedback()
         stopRecording()
     }
 
@@ -858,7 +858,6 @@ struct ARCameraScreen: View {
                     return
                 }
 
-                playRecordingStopSound()
                 recordingPreview = RecordingPreviewItem(url: outputURL)
             }
         }
@@ -891,8 +890,9 @@ struct ARCameraScreen: View {
         AudioServicesPlaySystemSound(Self.recordingStartSoundID)
     }
 
-    /// 録画停止と動画ファイル作成が終わったタイミングで、終了音を鳴らす。
-    private func playRecordingStopSound() {
+    /// 録画停止操作を受け付けたタイミングで、終了音と触覚を返す。
+    private func triggerRecordingStopFeedback() {
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
         AudioServicesPlaySystemSound(Self.recordingStopSoundID)
     }
 
