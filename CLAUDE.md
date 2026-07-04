@@ -30,7 +30,7 @@ Open in Xcode: `open Tsureteku.xcodeproj`
 Notes:
 - Deployment target is **iOS 18.0**.
 - AR, the camera, and Object Capture (3D scanning) require a **physical device** — the simulator can only build/run the non-AR UI.
-- The Xcode project uses a file-system-synchronized group, so files added under `Tsureteku/` are picked up automatically (no manual `.pbxproj` edits needed).
+- The Xcode project uses a file-system-synchronized group, so files added under `Tsureteku/` are picked up automatically (no manual `.pbxproj` edits needed). The local package under `Packages/` is referenced explicitly in the `.pbxproj`.
 
 ## Architecture
 
@@ -46,7 +46,9 @@ SwiftData-backed views use `@Query` + `@Environment(\.modelContext)` (don't pass
 
 Views (`Tsureteku/Views/`): character add / library / detail, 2D image replacement (`EditCharacterImageView`), the Object Capture preparation + workflow, 3D model adjustment, photo/video history + previews (`CapturedPhotoPreviewView`, `CapturedVideoPreviewView`), and shared pieces (thumbnail, empty state, manual trim, camera capture).
 
-AR (`Tsureteku/AR/ARCharacterView.swift`): a RealityKit/ARKit `UIViewRepresentable` that runs world- or face-tracking sessions, places 2D photo cutouts and 3D models, handles selection / scale / rotate, person occlusion, per-character brightness, idle/motion animation, and snapshot capture. UI state flows in via `@Binding` trigger counters from `ARCameraScreen`. Video recording lives in `ARCameraScreen` and uses ReplayKit (`RPScreenRecorder`) — it records the whole screen, so all visible UI is hidden while recording.
+AR (`Tsureteku/AR/ARCharacterView.swift`): a RealityKit/ARKit `UIViewRepresentable` that runs world- or face-tracking sessions, places 2D photo cutouts and 3D models, handles selection / scale / rotate, occlusion (person segmentation on supported devices; scene-mesh occlusion via Scene Reconstruction on LiDAR devices), per-character brightness, idle/motion animation, a placement sparkle effect, and snapshot capture. UI state flows in via `@Binding` trigger counters from `ARCameraScreen`. Video recording lives in `ARCameraScreen` and uses ReplayKit (`RPScreenRecorder`) — it records the whole screen, so all visible UI is hidden while recording.
+
+Reality Composer Pro content (`Packages/TsuretekuContent/`): a local Swift package holding RCP-authored scenes (`Sources/TsuretekuContent/TsuretekuContent.rkassets`), loaded at runtime with `Entity(named:in: tsuretekuContentBundle)`. Currently contains `Sparkle.usda`, the particle burst played when a 推し is placed. Edit scenes visually by opening `Package.realitycomposerpro` in Reality Composer Pro, or edit the `.usda` as text — note the emitter config struct must be named `currentState` (not `currentConfiguration`); wrong field names are silently ignored and fall back to defaults.
 
 Services (`Tsureteku/Services/`): file-backed stores and image processing.
 - `CharacterImageStore` / `CapturedPhotoStore` — persist images, videos, USDZ models, and Object Capture directories under Application Support (`Tsureteku/…`), referenced by filename stored on the model. `CapturedPhotoStore` also generates video poster images.
