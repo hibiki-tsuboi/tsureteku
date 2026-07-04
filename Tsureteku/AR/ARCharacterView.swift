@@ -642,7 +642,7 @@ struct ARCharacterView: UIViewRepresentable {
                     worldTransform.columns.3.z
                 )
                 // 床置きで粒の下半分が面に埋もれないよう、少しだけ浮かせる。
-                position.y += 0.06
+                position.y += 0.02
 
                 self.spawnSparkleBurst(at: position, in: arView, design: design)
             }
