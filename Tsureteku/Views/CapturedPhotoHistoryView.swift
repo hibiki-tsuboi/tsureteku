@@ -91,6 +91,11 @@ struct CapturedPhotoHistoryView: View {
                 }
             }
         }
+        // NavigationStack 自体はタブ切り替え時にのみ表示/非表示が切り替わるので、
+        // 詳細画面から戻ったときはリセットされず、タブ再訪時だけ「すべて」に戻る。
+        .onAppear {
+            selectedSceneTag = nil
+        }
     }
 
     // MARK: - シーンタグ絞り込み
