@@ -40,11 +40,11 @@ App entry and data:
 
 Models (`Tsureteku/Models/`):
 - `ToyCharacter` — a registered 推し: name, original/cutout image filenames, optional 3D model (USDZ) filename and Object Capture directory, plus AR settings: size, yaw, vertical offset, brightness multiplier, motion on/off, and placement mode (`CharacterARPlacementMode`: 3D model vs. 2D cutout, selectable per character when a model exists).
-- `CapturedPhoto` — a saved AR capture, photo **or video** (`CapturedMediaType`). For videos, `imageFileName` holds the poster image and `videoFileName` the movie file; both appear in one history timeline.
+- `CapturedPhoto` — a saved AR capture, photo **or video** (`CapturedMediaType`). For videos, `imageFileName` holds the poster image and `videoFileName` the movie file; both appear in one history timeline. Also carries scene tags (`SceneTag`: 屋外/食べ物/… — 10 curated Japanese categories) plus `sceneClassifierVersion` and a manual-edit flag that control re-classification.
 
 SwiftData-backed views use `@Query` + `@Environment(\.modelContext)` (don't pass the context manually). Mirror the existing previews' `.modelContainer(for: …, inMemory: true)` for new model-backed views so previews don't write to the on-disk store.
 
-Views (`Tsureteku/Views/`): character add / library / detail, 2D image replacement (`EditCharacterImageView`), the Object Capture preparation + workflow, 3D model adjustment, photo/video history + previews (`CapturedPhotoPreviewView`, `CapturedVideoPreviewView`), and shared pieces (thumbnail, empty state, manual trim, camera capture).
+Views (`Tsureteku/Views/`): character add / library / detail, 2D image replacement (`EditCharacterImageView`), the Object Capture preparation + workflow, 3D model adjustment, photo/video history + previews (`CapturedPhotoPreviewView`, `CapturedVideoPreviewView`), and shared pieces (thumbnail, empty state, manual trim, camera capture). The history tab filters by scene tag (chips above the grid; auto-backfills unclassified media on appear) and `SceneTagEditView` edits a capture's tags manually.
 
 AR (`Tsureteku/AR/ARCharacterView.swift`): a RealityKit/ARKit `UIViewRepresentable` that runs world- or face-tracking sessions, places 2D photo cutouts and 3D models, handles selection / scale / rotate, occlusion (person segmentation on supported devices; scene-mesh occlusion via Scene Reconstruction on LiDAR devices), per-character brightness, idle/motion animation, a placement sparkle effect, and snapshot capture. UI state flows in via `@Binding` trigger counters from `ARCameraScreen`. Video recording lives in `ARCameraScreen` and uses ReplayKit (`RPScreenRecorder`) — it records the whole screen, so all visible UI is hidden while recording.
 
@@ -53,6 +53,7 @@ Reality Composer Pro content (`Packages/TsuretekuContent/`): a local Swift packa
 Services (`Tsureteku/Services/`): file-backed stores and image processing.
 - `CharacterImageStore` / `CapturedPhotoStore` — persist images, videos, USDZ models, and Object Capture directories under Application Support (`Tsureteku/…`), referenced by filename stored on the model. `CapturedPhotoStore` also generates video poster images.
 - `SubjectCutoutService` (Vision foreground mask), `ImageCropService`, `ImagePreparation`, `ImageThumbnailCache` (downsampled + cached thumbnails for lists), `PhotoLibrarySaver`.
+- `SceneClassificationService` — on-device scene tagging via Vision's `VNClassifyImageRequest`, mapped to `SceneTag` through a curated keyword table (two-stage: precision 0.9 multi-tag, then a relaxed 0.7 single-tag fallback). **After changing thresholds or keywords, bump `classifierVersion`** so the history view re-classifies existing media (manually edited captures are skipped).
 - Thumbnails for 3D characters: `ModelThumbnailService` (renders a USDZ to source + cutout images), `ObjectCaptureThumbnailService` (picks a representative capture photo), `CharacterPlaceholderImageFactory` (fallback placeholder).
 - `UTType+Tsureteku` — `UTType.usdzModel` for file importers.
 
