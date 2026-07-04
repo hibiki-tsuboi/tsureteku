@@ -11,6 +11,7 @@ import CoreImage
 import CoreImage.CIFilterBuiltins
 import RealityKit
 import SwiftUI
+import TsuretekuContent
 import UIKit
 import simd
 
@@ -231,6 +232,8 @@ struct ARCharacterView: UIViewRepresentable {
         private var placementTask: Task<Void, Never>?
         private weak var coachingOverlay: ARCoachingOverlayView?
         private var selfieRenderedAsset: CharacterARAsset?
+        /// 配置演出のキラキラ（Reality Composer Proのシーン）。初回ロード後は使い回す。
+        private var sparkleTemplate: Entity?
         private var selfieSize: Float?
         private var selfieScaleDivisor: Float = 1
         private var selfieUnscaledHeight: Float = 1
@@ -612,11 +615,40 @@ struct ARCharacterView: UIViewRepresentable {
                 switch outcome {
                 case .success(let placement):
                     self.selectPlacement(placement)
+                    self.playPlacementSparkle(for: placement)
                     self.onStatus("\(placement.name)を配置しました。")
                 case .failure(let error):
                     self.onStatus(error.localizedDescription)
                 }
             }
+        }
+
+        /// 配置した推しの周りにキラキラを一度だけ再生する。演出なので失敗しても何もしない。
+        private func playPlacementSparkle(for placement: PlacedCharacter) {
+            Task { @MainActor [weak self] in
+                guard let self, let template = await self.loadSparkleTemplate() else {
+                    return
+                }
+
+                let sparkle = template.clone(recursive: true)
+                let bounds = placement.entity.visualBounds(relativeTo: placement.anchor)
+                sparkle.position = bounds.center
+                placement.anchor.addChild(sparkle)
+
+                // バースト（発生0.7秒＋寿命約1秒）が終わった頃に取り除く。
+                try? await Task.sleep(for: .seconds(2))
+                sparkle.removeFromParent()
+            }
+        }
+
+        private func loadSparkleTemplate() async -> Entity? {
+            if let sparkleTemplate {
+                return sparkleTemplate
+            }
+
+            let template = try? await Entity(named: "Sparkle", in: tsuretekuContentBundle)
+            sparkleTemplate = template
+            return template
         }
 
         func capture(in arView: ARView) {

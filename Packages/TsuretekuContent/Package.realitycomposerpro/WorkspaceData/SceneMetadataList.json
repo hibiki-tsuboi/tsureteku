@@ -1,0 +1,41 @@
+{
+  "8C5D91E4-2A47-4F6B-B3D8-0F71C9A6B513" : {
+    "cameraTransform" : [
+      1,
+      0,
+      -0,
+      0,
+      -0,
+      0.7071069,
+      -0.7071067,
+      0,
+      0,
+      0.7071067,
+      0.7071069,
+      0,
+      0,
+      0.53307986,
+      0.53307986,
+      1
+    ],
+    "objectMetadataList" : [
+      [
+        "8C5D91E4-2A47-4F6B-B3D8-0F71C9A6B513",
+        "Root"
+      ],
+      {
+        "isExpanded" : true,
+        "isLocked" : false
+      },
+      [
+        "8C5D91E4-2A47-4F6B-B3D8-0F71C9A6B513",
+        "Root",
+        "Sparkle"
+      ],
+      {
+        "isExpanded" : true,
+        "isLocked" : false
+      }
+    ]
+  }
+}
