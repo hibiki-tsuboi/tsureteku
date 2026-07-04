@@ -27,6 +27,7 @@ Apple標準フレームワークのみで構成されており、外部ライブ
 - **Scene Reconstruction**（ARKit） — LiDARによる周囲のメッシュ復元。現実の物体でキャラクターが隠れるオクルージョンに利用（対応端末のみ）
 - **RealityKit** — キャラクターの3D表示、人物オクルージョン、アニメーション
 - **Object Capture**（RealityKit） — ぬいぐるみをカメラで撮影して3Dモデル（USDZ）を生成
+- **Reality Composer Pro** — 配置時のキラキラエフェクト（パーティクル）の設計。ローカルパッケージ `Packages/TsuretekuContent` の `.rkassets` シーンとして管理し、実行時に設計値を読み込んで自前のパーティクルシミュレーション（通常のEntityをフレーム更新で駆動）で再生
 - **QuickLook Thumbnailing** — USDZモデルからのサムネイル生成
 
 ### 画像・カメラ・メディア
