@@ -14,7 +14,7 @@ import Vision
 enum SceneClassificationService {
     /// 分類ロジックの世代。閾値やキーワード表を変えたらここを上げると、
     /// 履歴画面のバックフィルが既存メディアを再分類する。
-    static let classifierVersion = 4
+    static let classifierVersion = 5
 
     /// 画像を解析してシーンタグを返す。該当なし・解析失敗時は空配列。
     /// Vision の推論は重いのでバックグラウンドで実行する。
@@ -115,8 +115,8 @@ enum SceneClassificationService {
             ["outdoor", "outdoors", "sky", "cloud", "clouds", "sunset", "sunrise",
              "landscape", "field", "playground"]
         case .indoor:
-            ["indoor", "indoors", "room", "furniture", "restaurant", "cafe",
-             "museum", "shop", "store", "kitchen", "bedroom"]
+            // カフェ・店舗系は `.cafeShop` へ分離した。
+            ["indoor", "indoors", "room", "furniture", "museum", "kitchen", "bedroom"]
         case .nature:
             // "animal" や "bird" はぬいぐるみが動物と判定されたときに誤爆するので入れない。
             ["nature", "plant", "plants", "tree", "trees", "flower", "flowers",
@@ -133,8 +133,21 @@ enum SceneClassificationService {
         case .night:
             ["night", "nighttime", "fireworks", "moon"]
         case .city:
+            // 電車・駅は `.vehicle` へ分離した。
             ["city", "cityscape", "building", "buildings", "skyscraper", "street",
-             "bridge", "tower", "downtown", "station", "train", "road"]
+             "bridge", "tower", "downtown", "road"]
+        case .vehicle:
+            ["vehicle", "car", "cars", "train", "trains", "railway", "railroad",
+             "subway", "tram", "bus", "station", "airplane", "aircraft", "airport",
+             "boat", "ship", "ferry", "bicycle", "motorcycle"]
+        case .cafeShop:
+            // "coffee" は机上のマグカップ程度で誤爆しやすいので入れない。
+            ["cafe", "restaurant", "diner", "bakery", "bar", "shop", "store",
+             "market", "supermarket", "mall"]
+        case .event:
+            ["fireworks", "concert", "stadium", "arena", "amusement", "carnival",
+             "festival", "parade", "circus", "roller_coaster", "coaster",
+             "ferris_wheel", "carousel"]
         }
     }
 }

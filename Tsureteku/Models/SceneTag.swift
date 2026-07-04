@@ -18,6 +18,9 @@ enum SceneTag: String, Codable, CaseIterable {
     case food
     case night
     case city
+    case vehicle
+    case cafeShop
+    case event
 
     var displayName: String {
         switch self {
@@ -35,6 +38,12 @@ enum SceneTag: String, Codable, CaseIterable {
             "夜"
         case .city:
             "街"
+        case .vehicle:
+            "乗り物"
+        case .cafeShop:
+            "カフェ・お店"
+        case .event:
+            "イベント"
         }
     }
 
@@ -54,6 +63,12 @@ enum SceneTag: String, Codable, CaseIterable {
             "moon.stars"
         case .city:
             "building.2"
+        case .vehicle:
+            "tram"
+        case .cafeShop:
+            "cup.and.saucer"
+        case .event:
+            "party.popper"
         }
     }
 }
