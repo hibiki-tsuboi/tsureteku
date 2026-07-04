@@ -641,10 +641,17 @@ struct ARCharacterView: UIViewRepresentable {
                     worldTransform.columns.3.y,
                     worldTransform.columns.3.z
                 )
-                // 床置きで粒の下半分が面に埋もれないよう、少しだけ浮かせる。
-                position.y += 0.02
 
-                self.spawnSparkleBurst(at: position, in: arView, design: design)
+                // 遠くに置いても画面上で見える大きさになるよう、カメラからの距離に応じて
+                // 演出全体（粒サイズ・初速・半径・重力・持ち上げ量）を相似形のまま拡大する。
+                let cameraPosition = arView.cameraTransform.translation
+                let distance = simd_distance(cameraPosition, position)
+                let scaleFactor = min(3.5, max(1, distance / 0.75))
+
+                // 床置きで粒の下半分が面に埋もれないよう、少しだけ浮かせる。
+                position.y += 0.02 * scaleFactor
+
+                self.spawnSparkleBurst(at: position, in: arView, design: design, scaleFactor: scaleFactor)
             }
         }
 
@@ -679,18 +686,18 @@ struct ARCharacterView: UIViewRepresentable {
 
         private static let sparkleParticleMesh = MeshResource.generateSphere(radius: 0.5)
 
-        private func spawnSparkleBurst(at position: SIMD3<Float>, in arView: ARView, design: SparkleDesign) {
+        private func spawnSparkleBurst(at position: SIMD3<Float>, in arView: ARView, design: SparkleDesign, scaleFactor: Float) {
             let anchor = AnchorEntity(world: position)
             arView.scene.addAnchor(anchor)
 
             let materials = design.colors.map { UnlitMaterial(color: $0) }
             for _ in 0..<design.count {
                 let direction = Self.randomUnitVector()
-                let speed = max(0.05, design.speed + Float.random(in: -design.speedVariation...design.speedVariation))
-                let scale = max(0.002, design.size + Float.random(in: -design.sizeVariation...design.sizeVariation))
+                let speed = max(0.05, design.speed + Float.random(in: -design.speedVariation...design.speedVariation)) * scaleFactor
+                let scale = max(0.002, design.size + Float.random(in: -design.sizeVariation...design.sizeVariation)) * scaleFactor
                 let lifeSpan = max(0.15, design.lifeSpan + TimeInterval.random(in: -design.lifeSpanVariation...design.lifeSpanVariation))
                 let entity = ModelEntity(mesh: Self.sparkleParticleMesh, materials: [materials.randomElement() ?? UnlitMaterial()])
-                entity.position = direction * Float.random(in: 0...design.emitRadius)
+                entity.position = direction * Float.random(in: 0...design.emitRadius * scaleFactor)
                 entity.scale = SIMD3<Float>(repeating: scale)
                 anchor.addChild(entity)
                 sparkleParticles.append(
@@ -699,7 +706,8 @@ struct ARCharacterView: UIViewRepresentable {
                         velocity: direction * speed,
                         age: 0,
                         lifeSpan: lifeSpan,
-                        baseScale: scale
+                        baseScale: scale,
+                        acceleration: design.acceleration * scaleFactor
                     )
                 )
             }
@@ -727,7 +735,7 @@ struct ARCharacterView: UIViewRepresentable {
                     continue
                 }
 
-                particle.velocity += design.acceleration * dt
+                particle.velocity += particle.acceleration * dt
                 particle.velocity *= max(0, 1 - design.damping * dt)
                 particle.entity.position += particle.velocity * dt
 
@@ -1532,13 +1540,14 @@ struct ARCharacterView: UIViewRepresentable {
             }
         }
 
-        /// 再生中のキラキラの粒1つぶん。
+        /// 再生中のキラキラの粒1つぶん。加速度は距離補正でバーストごとに変わるため粒側に持つ。
         private struct SparkleParticle {
             let entity: ModelEntity
             var velocity: SIMD3<Float>
             var age: TimeInterval
             let lifeSpan: TimeInterval
             let baseScale: Float
+            let acceleration: SIMD3<Float>
         }
 
         private struct PlacedCharacter {
