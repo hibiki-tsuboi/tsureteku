@@ -14,7 +14,7 @@ import Vision
 enum SceneClassificationService {
     /// 分類ロジックの世代。閾値やキーワード表を変えたらここを上げると、
     /// 履歴画面のバックフィルが既存メディアを再分類する。
-    static let classifierVersion = 2
+    static let classifierVersion = 4
 
     /// 画像を解析してシーンタグを返す。該当なし・解析失敗時は空配列。
     /// Vision の推論は重いのでバックグラウンドで実行する。
@@ -46,6 +46,14 @@ enum SceneClassificationService {
         }
 
         let observations = results.sorted { $0.confidence > $1.confidence }
+
+        #if DEBUG
+        // タグ誤判定の調査用に、モデルの生ラベル上位を出力する。
+        let topLabels = observations.prefix(10)
+            .map { String(format: "%@ %.2f", $0.identifier, $0.confidence) }
+            .joined(separator: ", ")
+        print("[SceneClassification] top: \(topLabels)")
+        #endif
 
         // 第1段階: Apple 推奨の precision/recall フィルタで「高精度で言い切れるラベル」だけを残す。
         let confidentIdentifiers = observations
@@ -110,15 +118,17 @@ enum SceneClassificationService {
             ["indoor", "indoors", "room", "furniture", "restaurant", "cafe",
              "museum", "shop", "store", "kitchen", "bedroom"]
         case .nature:
+            // "animal" や "bird" はぬいぐるみが動物と判定されたときに誤爆するので入れない。
             ["nature", "plant", "plants", "tree", "trees", "flower", "flowers",
              "forest", "mountain", "mountains", "grass", "garden", "park", "leaf",
-             "leaves", "snow", "animal", "bird", "insect"]
+             "leaves", "snow"]
         case .water:
             ["water", "beach", "sea", "ocean", "lake", "river", "waterfall",
              "pool", "coast", "shore", "aquarium", "waterfront"]
         case .food:
+            // "candy" "snack" "drink" などの間口が広い語は、カラフルなぬいぐるみや
+            // 机上のマグカップ程度で誤爆するので、明確に食事とわかる語だけにする。
             ["food", "meal", "dessert", "cake", "fruit", "vegetable", "bread",
-             "coffee", "drink", "beverage", "snack", "candy", "chocolate",
              "noodle", "noodles", "rice", "sushi", "pizza"]
         case .night:
             ["night", "nighttime", "fireworks", "moon"]
