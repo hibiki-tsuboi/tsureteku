@@ -90,4 +90,4 @@ AR,拡張現実,ぬいぐるみ,ぬい撮り,推し活,写真,カメラ,お出�
 
 - **Developer Mode**: 実機（iPhone / iPad）でビルドする場合は、設定アプリの「プライバシーとセキュリティ」から「デベロッパーモード」を有効にしてください。
 - **Archive**: リリース用のアーカイブを作成する際は、ターゲットを「Any iOS Device (arm64)」に設定して `Product` > `Archive` を実行してください。
-- **TestFlight Upload**: CLIでアップロードする場合は `Config/AppStoreConnectExportOptions.plist` を使ってください。`manageAppVersionAndBuildNumber` は `false` に固定し、App Store Connectでビルド番号が重複した場合はアップロードを失敗させます。Xcode Organizerから手動アップロードする場合も「Manage Version and Build Number」はOFFにし、ローカルの `CURRENT_PROJECT_VERSION` を上げてからArchiveし直してください。
+- **TestFlight Upload**: ビルド番号の自動更新を防ぐため、Xcode OrganizerではArchive作成までに留め、アップロードはCLIで `Config/AppStoreConnectExportOptions.plist` を使ってください。`manageAppVersionAndBuildNumber` は `false` に固定し、App Store Connectでビルド番号が重複した場合はアップロードを失敗させます。失敗したらローカルの `CURRENT_PROJECT_VERSION` を上げてArchiveし直してください。
