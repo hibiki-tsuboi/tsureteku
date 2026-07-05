@@ -41,7 +41,7 @@ enum SceneTag: String, Codable, CaseIterable {
         case .vehicle:
             "乗り物"
         case .cafeShop:
-            "カフェ・お店"
+            "お店"
         case .event:
             "イベント"
         }
@@ -66,7 +66,7 @@ enum SceneTag: String, Codable, CaseIterable {
         case .vehicle:
             "tram"
         case .cafeShop:
-            "cup.and.saucer"
+            "storefront"
         case .event:
             "party.popper"
         }

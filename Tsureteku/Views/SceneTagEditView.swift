@@ -40,15 +40,13 @@ struct SceneTagEditView: View {
                             }
                         }
                     }
-                } footer: {
-                    Text("手動で変更したタグは、自動判定で上書きされなくなります。")
                 }
 
                 if photo.isSceneTagsEditedManually {
                     Section {
                         Button(action: reclassify) {
                             HStack {
-                                Text("タグを自動で判定し直す")
+                                Text("タグをリセット")
 
                                 if isReclassifying {
                                     Spacer()
@@ -57,8 +55,6 @@ struct SceneTagEditView: View {
                             }
                         }
                         .disabled(isReclassifying)
-                    } footer: {
-                        Text("手動での変更を破棄して、いますぐ自動判定をやり直します。")
                     }
                 }
             }

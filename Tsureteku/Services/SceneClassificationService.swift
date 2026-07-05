@@ -14,7 +14,7 @@ import Vision
 enum SceneClassificationService {
     /// 分類ロジックの世代。閾値やキーワード表を変えたらここを上げると、
     /// 履歴画面のバックフィルが既存メディアを再分類する。
-    static let classifierVersion = 5
+    static let classifierVersion = 6
 
     /// 画像を解析してシーンタグを返す。該当なし・解析失敗時は空配列。
     /// Vision の推論は重いのでバックグラウンドで実行する。
@@ -101,11 +101,30 @@ enum SceneClassificationService {
         return nil
     }
 
-    /// 複合ラベル（例: "sunset_sunrise"）にも対応できるよう、アンダースコアで
-    /// 分割した語も含めて完全一致で照合する。部分文字列一致は誤爆しやすいので使わない。
+    /// 複合ラベル（例: "sunset_sunrise" や "manta ray, stingray"）にも対応できるよう、
+    /// 区切り文字で分割した語と、スペース区切りの語句を `_` でつないだ形も照合する。
+    /// 部分文字列一致は誤爆しやすいので使わない。
     private nonisolated static func words(from identifier: String) -> Set<String> {
-        var words: Set<String> = [identifier]
-        words.formUnion(identifier.split(separator: "_").map(String.init))
+        let phraseSeparators = CharacterSet(charactersIn: ",;")
+        let tokenSeparators = CharacterSet.alphanumerics.inverted
+        let phrases = identifier
+            .lowercased()
+            .components(separatedBy: phraseSeparators)
+
+        var words: Set<String> = []
+        for phrase in phrases {
+            let tokens = phrase
+                .components(separatedBy: tokenSeparators)
+                .filter { !$0.isEmpty }
+
+            guard !tokens.isEmpty else {
+                continue
+            }
+
+            words.insert(tokens.joined(separator: "_"))
+            words.formUnion(tokens)
+        }
+
         return words
     }
 
@@ -127,8 +146,8 @@ enum SceneClassificationService {
              "pool", "coast", "shore", "aquarium", "waterfront"]
         case .food:
             // "candy" "snack" "drink" などの間口が広い語は、カラフルなぬいぐるみや
-            // 机上のマグカップ程度で誤爆するので、明確に食事とわかる語だけにする。
-            ["food", "meal", "dessert", "cake", "fruit", "vegetable", "bread",
+            // 机上のマグカップ程度で誤爆する。"food" もぬいぐるみ本体に出ることがあるため使わない。
+            ["meal", "dessert", "cake", "fruit", "vegetable", "bread",
              "noodle", "noodles", "rice", "sushi", "pizza"]
         case .night:
             ["night", "nighttime", "fireworks", "moon"]
