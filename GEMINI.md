@@ -4,7 +4,7 @@
 Tsureteku（つれてく）は、SwiftUI と SwiftData を使用した AR iOS アプリです。お気に入りの「推し」（ぬいぐるみ・フィギュア等）を写真の自動切り抜きや3Dスキャン（Object Capture / USDZ）で登録し、ARで床・机・壁や自撮りで一緒に配置して写真・動画を撮影できます。データは端末内にのみ保存されます。
 
 - **Main Technologies**: Swift, SwiftUI, SwiftData, RealityKit, ARKit, Vision, Xcode
-- **Deployment Target**: iOS 18.0
+- **Deployment Target**: iOS 26.0
 - **Source Code**: `Tsureteku/` ディレクトリに主要なソースコードが格納されています。
 
 ## Building and Running
