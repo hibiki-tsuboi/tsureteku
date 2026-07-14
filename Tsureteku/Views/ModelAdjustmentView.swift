@@ -37,7 +37,7 @@ struct ModelAdjustmentView: View {
                     .listRowInsets(EdgeInsets())
             }
 
-            Section("AR表示") {
+            Section {
                 HStack {
                     Text("サイズ")
                     Slider(value: $character.defaultSizeMeters, in: 0.12...1.2)
@@ -62,6 +62,13 @@ struct ModelAdjustmentView: View {
                         .font(.caption.monospacedDigit())
                         .foregroundStyle(.secondary)
                         .frame(width: 48, alignment: .trailing)
+                }
+
+                Button {
+                    character.modelYawDegrees = wrappedYaw(character.modelYawDegrees + 180)
+                    save()
+                } label: {
+                    Label("前後を反転", systemImage: "arrow.triangle.2.circlepath")
                 }
 
                 HStack {
@@ -90,6 +97,10 @@ struct ModelAdjustmentView: View {
                 } label: {
                     Label("調整をリセット", systemImage: "arrow.counterclockwise")
                 }
+            } header: {
+                Text("表示・共有")
+            } footer: {
+                Text("向きはAR表示と共有するUSDZに反映されます。サイズと上下位置はAR表示だけに使われます。")
             }
         }
         .navigationTitle("3Dモデル調整")

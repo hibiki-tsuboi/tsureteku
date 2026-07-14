@@ -21,6 +21,7 @@ struct CharacterDetailView: View {
     @State private var isEditingImage = false
     @State private var isModelDeleteConfirmationPresented = false
     @State private var isCaptureFlowPresented = false
+    @State private var isExportingModel = false
     @State private var shareableModel: ShareableModel?
     @State private var errorMessage: String?
 
@@ -139,8 +140,16 @@ struct CharacterDetailView: View {
                     Button {
                         shareModel()
                     } label: {
-                        Label("3Dモデルを共有", systemImage: "square.and.arrow.up")
+                        if isExportingModel {
+                            HStack {
+                                ProgressView()
+                                Text("向きを反映中…")
+                            }
+                        } else {
+                            Label("3Dモデルを共有", systemImage: "square.and.arrow.up")
+                        }
                     }
+                    .disabled(isExportingModel)
 
                     Button(role: .destructive) {
                         isModelDeleteConfirmationPresented = true
@@ -226,7 +235,8 @@ struct CharacterDetailView: View {
     }
 
     private func shareModel() {
-        guard let modelFileName = character.modelFileName,
+        guard !isExportingModel,
+              let modelFileName = character.modelFileName,
               let sourceURL = try? CharacterImageStore.modelURL(for: modelFileName) else {
             errorMessage = "共有できる3Dモデルがありません。"
             return
@@ -237,15 +247,28 @@ struct CharacterDetailView: View {
         let invalidCharacters = CharacterSet(charactersIn: "/\\?%*|\"<>:")
         let safeName = baseName.components(separatedBy: invalidCharacters).joined()
         let exportURL = FileManager.default.temporaryDirectory.appendingPathComponent("\(safeName).usdz")
+        let yawDegrees = character.modelYawDegrees
 
-        try? FileManager.default.removeItem(at: exportURL)
+        errorMessage = nil
+        isExportingModel = true
 
-        do {
-            try FileManager.default.copyItem(at: sourceURL, to: exportURL)
-            shareableModel = ShareableModel(url: exportURL)
-        } catch {
-            // 名前付きコピーに失敗した場合は元ファイルをそのまま共有する。
-            shareableModel = ShareableModel(url: sourceURL)
+        Task { @MainActor in
+            defer {
+                isExportingModel = false
+            }
+
+            do {
+                try await Task.detached(priority: .userInitiated) {
+                    try ModelExportService.exportModel(
+                        from: sourceURL,
+                        to: exportURL,
+                        yawDegrees: yawDegrees
+                    )
+                }.value
+                shareableModel = ShareableModel(url: exportURL)
+            } catch {
+                errorMessage = "3Dモデルを書き出せませんでした。\(error.localizedDescription)"
+            }
         }
     }
 
