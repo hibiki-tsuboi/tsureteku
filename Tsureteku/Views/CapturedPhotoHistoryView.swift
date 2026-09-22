@@ -27,7 +27,7 @@ struct CapturedPhotoHistoryView: View {
     private var columns: [GridItem] {
         // iPad（regular幅）では1セルが小さくなりすぎないよう最小幅を広げる。
         let minimum: CGFloat = horizontalSizeClass == .regular ? 200 : 150
-        return [GridItem(.adaptive(minimum: minimum), spacing: 12)]
+        return [GridItem(.adaptive(minimum: minimum), spacing: 12, alignment: .top)]
     }
 
     var body: some View {
@@ -338,42 +338,44 @@ private struct CapturedPhotoGridCell: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(.thinMaterial)
-
-                if let image = CapturedPhotoStore.thumbnail(named: photo.imageFileName, maxPixelSize: 600) {
-                    Image(uiImage: image)
-                        .resizable()
-                        .scaledToFill()
-                } else {
-                    Image(systemName: "exclamationmark.triangle")
-                        .font(.title2)
-                        .foregroundStyle(.secondary)
+            // 先に枠の縦横比を決め、写真は重ねて切り抜く。写真を ZStack に直接入れると、
+            // iPadの横向きで撮った横長の写真で枠が横に広がり、隣のセルに重なる。
+            let thumbnail = CapturedPhotoStore.thumbnail(named: photo.imageFileName, maxPixelSize: 600)
+            RoundedRectangle(cornerRadius: 8)
+                .fill(.thinMaterial)
+                .aspectRatio(Self.cellAspectRatio(for: thumbnail), contentMode: .fit)
+                .overlay {
+                    if let image = thumbnail {
+                        Image(uiImage: image)
+                            .resizable()
+                            .scaledToFill()
+                    } else {
+                        Image(systemName: "exclamationmark.triangle")
+                            .font(.title2)
+                            .foregroundStyle(.secondary)
+                    }
                 }
-            }
-            .aspectRatio(3 / 4, contentMode: .fit)
-            .clipShape(RoundedRectangle(cornerRadius: 8))
-            .overlay {
-                if photo.mediaType == .video {
-                    Image(systemName: "play.circle.fill")
-                        .font(.system(size: 40))
-                        .foregroundStyle(.white)
-                        .shadow(color: .black.opacity(0.4), radius: 4)
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+                .overlay {
+                    if photo.mediaType == .video {
+                        Image(systemName: "play.circle.fill")
+                            .font(.system(size: 40))
+                            .foregroundStyle(.white)
+                            .shadow(color: .black.opacity(0.4), radius: 4)
+                    }
                 }
-            }
-            .overlay {
-                if selectionState == .selected {
-                    RoundedRectangle(cornerRadius: 8)
-                        .stroke(Color.accentColor, lineWidth: 3)
+                .overlay {
+                    if selectionState == .selected {
+                        RoundedRectangle(cornerRadius: 8)
+                            .stroke(Color.accentColor, lineWidth: 3)
+                    }
                 }
-            }
-            .overlay(alignment: .bottomTrailing) {
-                if let selectionState {
-                    selectionBadge(isSelected: selectionState == .selected)
-                        .padding(8)
+                .overlay(alignment: .bottomTrailing) {
+                    if let selectionState {
+                        selectionBadge(isSelected: selectionState == .selected)
+                            .padding(8)
+                    }
                 }
-            }
 
             Text(photo.createdAt, format: .dateTime.year().month().day().hour().minute())
                 .font(.caption)
@@ -386,6 +388,15 @@ private struct CapturedPhotoGridCell: View {
                 .foregroundStyle(BrandColor.purple)
                 .lineLimit(1)
         }
+    }
+
+    /// セルの縦横比。縦長の写真（iPhoneのAR写真）は全体を見せ、3:4より横長の写真は3:4に切り抜く。
+    private static func cellAspectRatio(for image: UIImage?) -> CGFloat {
+        guard let image, image.size.height > 0 else {
+            return 3 / 4
+        }
+
+        return min(image.size.width / image.size.height, 3 / 4)
     }
 
     private func selectionBadge(isSelected: Bool) -> some View {
