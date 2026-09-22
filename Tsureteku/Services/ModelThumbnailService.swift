@@ -9,6 +9,9 @@ import QuickLookThumbnailing
 import UIKit
 
 enum ModelThumbnailService {
+    /// 生成した画像は保存して使うので、端末の画面倍率には合わせず 3x（1536px）で作る。
+    private static let thumbnailScale: CGFloat = 3
+
     struct ThumbnailImages {
         let source: UIImage
         let cutout: UIImage
@@ -28,7 +31,7 @@ enum ModelThumbnailService {
             let request = QLThumbnailGenerator.Request(
                 fileAt: modelURL,
                 size: CGSize(width: 512, height: 512),
-                scale: UIScreen.main.scale,
+                scale: thumbnailScale,
                 representationTypes: .thumbnail
             )
 
