@@ -35,7 +35,7 @@ Notes:
 ## Architecture
 
 App entry and data:
-- `TsuretekuApp.swift` — `@main`. Builds one on-disk `ModelContainer` over `Schema([ToyCharacter.self, CapturedPhoto.self])` and injects it via `.modelContainer(...)`. **Any new `@Model` type must be added to that `Schema` array** or it won't be persisted.
+- `TsuretekuApp.swift` — `@main`. Builds one on-disk `ModelContainer` over `Schema([ToyCharacter.self, CapturedPhoto.self])` and injects it via `.modelContainer(...)`. **Any new `@Model` type must be added to that `Schema` array** or it won't be persisted — and to the JSON backup (see `BackupService` below), as must any new stored property on an existing model.
 - `ContentView.swift` — root `TabView`: AR (`ARCameraScreen`), 推し (`CharacterLibraryView`), 履歴 (`CapturedPhotoHistoryView`). The app is locked to light mode (`.preferredColorScheme(.light)`).
 
 Models (`Tsureteku/Models/`):
@@ -44,7 +44,7 @@ Models (`Tsureteku/Models/`):
 
 SwiftData-backed views use `@Query` + `@Environment(\.modelContext)` (don't pass the context manually). Mirror the existing previews' `.modelContainer(for: …, inMemory: true)` for new model-backed views so previews don't write to the on-disk store.
 
-Views (`Tsureteku/Views/`): character add / library / detail, 2D image replacement (`EditCharacterImageView`), the Object Capture preparation + workflow, 3D model adjustment, photo/video history + previews (`CapturedPhotoPreviewView`, `CapturedVideoPreviewView`), and shared pieces (thumbnail, empty state, manual trim, camera capture). The history tab filters by scene tag (chips above the grid; auto-backfills unclassified media on appear) and `SceneTagEditView` edits a capture's tags manually.
+Views (`Tsureteku/Views/`): character add / library / detail, 2D image replacement (`EditCharacterImageView`), the Object Capture preparation + workflow, 3D model adjustment, photo/video history + previews (`CapturedPhotoPreviewView`, `CapturedVideoPreviewView`), and shared pieces (thumbnail, empty state, manual trim, camera capture). The history tab filters by scene tag (chips above the grid; auto-backfills unclassified media on appear) and `SceneTagEditView` edits a capture's tags manually. `BackupRestoreView` (opened from the 推し tab toolbar, and from its empty state) exports/restores all data as one JSON file for moving to a new iPhone.
 
 AR (`Tsureteku/AR/ARCharacterView.swift`): a RealityKit/ARKit `UIViewRepresentable` that runs world- or face-tracking sessions, places 2D photo cutouts and 3D models, handles selection / scale / rotate, occlusion (person segmentation on supported devices; scene-mesh occlusion via Scene Reconstruction on LiDAR devices), per-character brightness, idle/motion animation, a placement sparkle effect, and snapshot capture. UI state flows in via `@Binding` trigger counters from `ARCameraScreen`. Video recording lives in `ARCameraScreen` and uses ReplayKit (`RPScreenRecorder`) — it records the whole screen, so all visible UI is hidden while recording.
 
@@ -56,6 +56,10 @@ Services (`Tsureteku/Services/`): file-backed stores and image processing.
 - `SceneClassificationService` — on-device scene tagging via Vision's `VNClassifyImageRequest`, mapped to `SceneTag` through a curated keyword table (two-stage: precision 0.9 multi-tag, then a relaxed 0.7 single-tag fallback). **After changing thresholds or keywords, bump `classifierVersion`** so the history view re-classifies existing media (manually edited captures are skipped).
 - Thumbnails for 3D characters: `ModelThumbnailService` (renders a USDZ to source + cutout images), `ObjectCaptureThumbnailService` (picks a representative capture photo), `CharacterPlaceholderImageFactory` (fallback placeholder).
 - `UTType+Tsureteku` — `UTType.usdzModel` for file importers.
+- Backup (機種変更用のJSON書き出し・復元):
+  - `BackupFormat` — the file format: `{"manifest": {...records...}, "files": [{"path", "data": <base64>}]}`, the Codable record types mirroring `ToyCharacter` / `CapturedPhoto`, and `BackupFilePath` (paths inside the backup, validated on import). Bump `BackupFormat.version` when the format changes incompatibly.
+  - `BackupJSONReader` / `BackupArchive` — streaming JSON read/write (backups can be several GB, so never load them whole); Foundation-only.
+  - `BackupService` — builds the export from SwiftData + stores; restores by extracting to `Application Support/Tsureteku/ImportStaging` first, then moving files in with fresh names and inserting only records whose `id` doesn't exist yet (existing data is never deleted; restoring twice doesn't duplicate).
 
 `Tsureteku/Theme/BrandTheme.swift` — brand colors, gradient, and button style.
 
