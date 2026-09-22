@@ -151,6 +151,32 @@ enum CharacterImageStore {
         try? FileManager.default.removeItem(at: url)
     }
 
+    // MARK: - バックアップからの取り込み
+
+    /// 別の場所にある画像を保存領域へ移して取り込み、新しいファイル名を返す。
+    nonisolated static func importImage(movingFrom sourceURL: URL, kind: ImageKind) throws -> String {
+        let pathExtension = sourceURL.pathExtension.isEmpty ? "png" : sourceURL.pathExtension
+        let fileName = UUID().uuidString + "." + pathExtension
+        try FileManager.default.moveItem(at: sourceURL, to: try url(for: fileName, kind: kind))
+        return fileName
+    }
+
+    /// 別の場所にあるUSDZを保存領域へ移して取り込み、新しいファイル名を返す。
+    nonisolated static func importModel(movingFrom sourceURL: URL) throws -> String {
+        let destination = try newModelURL()
+        try FileManager.default.moveItem(at: sourceURL, to: destination.url)
+        return destination.fileName
+    }
+
+    /// 別の場所にある3D撮影フォルダを保存領域へ移して取り込み、新しいフォルダ名を返す。
+    nonisolated static func importObjectCaptureDirectory(movingFrom sourceURL: URL) throws -> String {
+        // 親フォルダごと用意された空フォルダを、取り込むフォルダで置き換える。
+        let destination = try newObjectCaptureDirectory()
+        try FileManager.default.removeItem(at: destination.url)
+        try FileManager.default.moveItem(at: sourceURL, to: destination.url)
+        return destination.directoryName
+    }
+
     private nonisolated static func directoryURL(for kind: ImageKind) throws -> URL {
         let directoryURL = try charactersBaseURL()
             .appendingPathComponent(kind.rawValue, isDirectory: true)

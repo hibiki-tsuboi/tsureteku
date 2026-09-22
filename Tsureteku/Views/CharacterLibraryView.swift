@@ -16,6 +16,7 @@ struct CharacterLibraryView: View {
 
     @State private var navigationPath = NavigationPath()
     @State private var isAddingCharacter = false
+    @State private var isBackupPresented = false
 
     init(resetTrigger: Int = 0) {
         self.resetTrigger = resetTrigger
@@ -54,6 +55,15 @@ struct CharacterLibraryView: View {
             }
             .navigationTitle("推し")
             .toolbar {
+                // 機種変更直後の空の状態からも復元できるよう、常に出しておく。
+                ToolbarItem(placement: .topBarLeading) {
+                    Button {
+                        isBackupPresented = true
+                    } label: {
+                        Label("バックアップ", systemImage: "externaldrive")
+                    }
+                }
+
                 if !characters.isEmpty {
                     ToolbarItem(placement: .primaryAction) {
                         Button {
@@ -66,6 +76,9 @@ struct CharacterLibraryView: View {
             }
             .sheet(isPresented: $isAddingCharacter) {
                 AddCharacterView()
+            }
+            .sheet(isPresented: $isBackupPresented) {
+                BackupRestoreView()
             }
             .navigationDestination(for: UUID.self) { characterID in
                 if let character = characters.first(where: { $0.id == characterID }) {
@@ -91,10 +104,20 @@ struct CharacterLibraryView: View {
             )
             .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-            Text(Self.versionText)
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-                .padding(.bottom, 12)
+            VStack(spacing: 12) {
+                Button {
+                    isBackupPresented = true
+                } label: {
+                    Label("バックアップから復元", systemImage: "square.and.arrow.down")
+                        .font(.subheadline.weight(.semibold))
+                }
+                .tint(BrandColor.purple)
+
+                Text(Self.versionText)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.bottom, 12)
         }
     }
 

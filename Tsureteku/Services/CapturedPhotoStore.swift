@@ -105,7 +105,16 @@ enum CapturedPhotoStore {
         try? FileManager.default.removeItem(at: url)
     }
 
-    private static func url(for fileName: String) throws -> URL {
+    /// 別の場所にあるファイル（写真・動画）を保存領域へ移して取り込み、新しいファイル名を返す。
+    static func importFile(movingFrom sourceURL: URL) throws -> String {
+        let pathExtension = sourceURL.pathExtension.isEmpty ? "jpg" : sourceURL.pathExtension
+        let fileName = UUID().uuidString + "." + pathExtension
+        try FileManager.default.moveItem(at: sourceURL, to: try url(for: fileName))
+        return fileName
+    }
+
+    /// 保存領域内のファイルURL（存在は確かめない）。
+    static func url(for fileName: String) throws -> URL {
         try directoryURL().appendingPathComponent(fileName)
     }
 
