@@ -8,7 +8,7 @@
 
 import SwiftUI
 
-enum BrandColor {
+nonisolated enum BrandColor {
     /// メインの紫（アクセントカラーと同値） #7C5CFF
     static let purple = Color(red: 0.486, green: 0.361, blue: 1.0)
     /// 濃い紫（グラデーション下・押下） #5B3FD9
